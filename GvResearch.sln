@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{FE6EE0C4
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Iaet.Core.Tests", "tests\Iaet.Core.Tests\Iaet.Core.Tests.csproj", "{3FC6D373-DFB0-46AA-9C65-5EF827FF90C7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Iaet.Capture", "src\Iaet.Capture\Iaet.Capture.csproj", "{618C5E9D-E245-48AC-B60D-E9CCD8768E9E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{3FC6D373-DFB0-46AA-9C65-5EF827FF90C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3FC6D373-DFB0-46AA-9C65-5EF827FF90C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3FC6D373-DFB0-46AA-9C65-5EF827FF90C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{618C5E9D-E245-48AC-B60D-E9CCD8768E9E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{618C5E9D-E245-48AC-B60D-E9CCD8768E9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{618C5E9D-E245-48AC-B60D-E9CCD8768E9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{618C5E9D-E245-48AC-B60D-E9CCD8768E9E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{87E7EED8-CC38-48DC-8BCE-79868B7D3609} = {3B541859-4159-4A11-86C2-FE28A61E7D50}
 		{3FC6D373-DFB0-46AA-9C65-5EF827FF90C7} = {FE6EE0C4-016C-48CE-9BAD-A4494288B1A9}
+		{618C5E9D-E245-48AC-B60D-E9CCD8768E9E} = {3B541859-4159-4A11-86C2-FE28A61E7D50}
 	EndGlobalSection
 EndGlobal
