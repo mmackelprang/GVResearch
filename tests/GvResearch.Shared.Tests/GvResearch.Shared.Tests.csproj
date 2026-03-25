@@ -13,6 +13,8 @@
     <NoWarn>$(NoWarn);CA1716</NoWarn>
     <!-- CA2007: test projects run on a single-threaded context; ConfigureAwait not needed -->
     <NoWarn>$(NoWarn);CA2007</NoWarn>
+    <!-- CA2000: HttpClient takes ownership of the HttpMessageHandler passed to its constructor -->
+    <NoWarn>$(NoWarn);CA2000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
