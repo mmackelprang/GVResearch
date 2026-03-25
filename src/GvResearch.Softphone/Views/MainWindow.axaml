@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GvResearch.Softphone.ViewModels"
+        xmlns:views="using:GvResearch.Softphone.Views"
+        x:Class="GvResearch.Softphone.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="GV Softphone"
+        Width="320"
+        Height="500"
+        CanResize="False">
+    <DockPanel>
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="8,4">
+            <TextBlock Text="{Binding StatusText}" FontSize="12" />
+        </Border>
+
+        <!-- Main content: switch between dialer and active call -->
+        <Panel>
+            <views:DialerView DataContext="{Binding Dialer}"
+                              IsVisible="{Binding !IsInCall, DataType={x:Type vm:MainWindowViewModel}}" />
+            <views:ActiveCallView DataContext="{Binding ActiveCall}"
+                                  IsVisible="{Binding IsInCall, DataType={x:Type vm:MainWindowViewModel}}" />
+        </Panel>
+    </DockPanel>
+</Window>

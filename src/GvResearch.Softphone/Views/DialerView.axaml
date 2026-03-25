@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GvResearch.Softphone.ViewModels"
+             x:Class="GvResearch.Softphone.Views.DialerView"
+             x:DataType="vm:DialerViewModel">
+    <StackPanel Spacing="8" Margin="16">
+        <!-- Number display -->
+        <TextBox Text="{Binding DialNumber}"
+                 FontSize="24"
+                 HorizontalContentAlignment="Right"
+                 IsReadOnly="True"
+                 Watermark="Enter number" />
+
+        <!-- Dial pad grid 3x4 -->
+        <Grid ColumnDefinitions="*,*,*" RowDefinitions="*,*,*,*" HorizontalAlignment="Center">
+            <!-- Row 0 -->
+            <Button Grid.Row="0" Grid.Column="0" Content="1" Command="{Binding DialDigitCommand}" CommandParameter="1" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="0" Grid.Column="1" Content="2" Command="{Binding DialDigitCommand}" CommandParameter="2" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="0" Grid.Column="2" Content="3" Command="{Binding DialDigitCommand}" CommandParameter="3" Width="60" Height="50" Margin="4" />
+            <!-- Row 1 -->
+            <Button Grid.Row="1" Grid.Column="0" Content="4" Command="{Binding DialDigitCommand}" CommandParameter="4" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="1" Grid.Column="1" Content="5" Command="{Binding DialDigitCommand}" CommandParameter="5" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="1" Grid.Column="2" Content="6" Command="{Binding DialDigitCommand}" CommandParameter="6" Width="60" Height="50" Margin="4" />
+            <!-- Row 2 -->
+            <Button Grid.Row="2" Grid.Column="0" Content="7" Command="{Binding DialDigitCommand}" CommandParameter="7" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="2" Grid.Column="1" Content="8" Command="{Binding DialDigitCommand}" CommandParameter="8" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="2" Grid.Column="2" Content="9" Command="{Binding DialDigitCommand}" CommandParameter="9" Width="60" Height="50" Margin="4" />
+            <!-- Row 3 -->
+            <Button Grid.Row="3" Grid.Column="0" Content="*" Command="{Binding DialDigitCommand}" CommandParameter="*" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="3" Grid.Column="1" Content="0" Command="{Binding DialDigitCommand}" CommandParameter="0" Width="60" Height="50" Margin="4" />
+            <Button Grid.Row="3" Grid.Column="2" Content="#" Command="{Binding DialDigitCommand}" CommandParameter="#" Width="60" Height="50" Margin="4" />
+        </Grid>
+
+        <!-- Action buttons -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+            <Button Content="Clear" Command="{Binding ClearCommand}" Width="80" />
+            <Button Content="Call" Command="{Binding CallCommand}" Width="80"
+                    Background="#228B22" Foreground="White" />
+            <Button Content="&#x232B;" Command="{Binding BackspaceCommand}" Width="80" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>
