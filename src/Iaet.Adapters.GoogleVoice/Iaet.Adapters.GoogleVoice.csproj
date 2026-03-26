@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Iaet.Core\Iaet.Core.csproj" />
+    <PackageReference Include="Iaet.Core" Version="0.1.0" />
   </ItemGroup>
 
 </Project>

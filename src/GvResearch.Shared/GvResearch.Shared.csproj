@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Iaet.Core\Iaet.Core.csproj" />
+    <PackageReference Include="Iaet.Core" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -12,9 +12,6 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <!-- CA1716: 'Shared' is a VB keyword but is the canonical assembly/namespace prefix for this project -->
     <NoWarn>$(NoWarn);CA1716</NoWarn>
   </PropertyGroup>
