@@ -1,10 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <!-- Test method names use underscore_convention; suppress naming rules for test projects -->
@@ -13,6 +9,8 @@
     <NoWarn>$(NoWarn);CA2007</NoWarn>
     <!-- CA2000: dispose managed by test lifecycle -->
     <NoWarn>$(NoWarn);CA2000</NoWarn>
+    <!-- CA1515: test class types do not need to be internal -->
+    <NoWarn>$(NoWarn);CA1515</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

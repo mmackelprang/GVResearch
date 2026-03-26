@@ -6,17 +6,15 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Http" Version="8.1.1" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.10.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <!-- CA1716: 'Shared' namespace prefix used in referenced assembly -->
-    <NoWarn>$(NoWarn);CA1716</NoWarn>
+    <!-- CA1515: ASP.NET Web SDK requires public types for minimal API route handlers and middleware -->
+    <NoWarn>$(NoWarn);CA1716;CA1515</NoWarn>
   </PropertyGroup>
 
 </Project>
