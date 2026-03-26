@@ -82,9 +82,181 @@ Pure abstractions: `ICaptureSession`, `IEndpointCatalog`, `ISchemaInferrer`, `IR
 
 System.CommandLine-based CLI. Currently has `capture start` and `catalog sessions/endpoints` commands. Will be extended with all new commands.
 
-## 4. Assemblies — New
+## 4. Data Streams and Media — First-Class Protocol Support
 
-### 4.1 Iaet.Schema — Schema Inference Engine
+IAET captures more than HTTP request/response pairs. Modern web applications use multiple transport mechanisms, and discovering *which* protocols are in use is often the most valuable first step in API investigation.
+
+### 4.1 Supported Protocol Types
+
+| Protocol | Capture Method | What's Stored |
+|---|---|---|
+| **HTTP (XHR/Fetch)** | CDP Network domain | Full request/response (headers, body, timing) |
+| **WebSocket** | CDP Network.webSocketFrame* events | Connection URL, frame history (text + binary), message direction, timestamps |
+| **Server-Sent Events** | CDP Network domain (long-lived GET) | Connection URL, event stream with event types and data payloads |
+| **WebRTC** | CDP + `chrome.webrtc` internals | SDP offers/answers, ICE candidates, codec negotiation, STUN/TURN servers used, optional short RTP sample capture |
+| **Media Streams (HLS/DASH)** | CDP Network domain (manifest + segment requests) | Manifest URLs, segment URLs, codec info from manifests, optional segment sample download |
+| **gRPC-Web / Protobuf** | CDP Network domain (detected via content-type) | Raw binary payloads stored, with Protobuf field inference for schema analysis |
+| **Web Audio API** | CDP Runtime domain (hook `AudioContext`) | Audio graph topology, source nodes, destination nodes — metadata only |
+
+### 4.2 Core Model Extensions
+
+The `CapturedRequest` model (HTTP-centric) is joined by a protocol-agnostic capture model:
+
+```csharp
+public sealed record CapturedStream
+{
+    public required Guid Id { get; init; }
+    public required Guid SessionId { get; init; }
+    public required StreamProtocol Protocol { get; init; }
+    public required string Url { get; init; }
+    public required DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset? EndedAt { get; init; }
+    public required StreamMetadata Metadata { get; init; }
+    public IReadOnlyList<StreamFrame>? Frames { get; init; }
+    public string? SamplePayloadPath { get; init; } // Path to captured sample file
+    public string? Tag { get; init; }
+}
+
+public enum StreamProtocol
+{
+    WebSocket,
+    ServerSentEvents,
+    WebRtc,
+    HlsStream,
+    DashStream,
+    GrpcWeb,
+    WebAudio,
+    Unknown
+}
+
+public sealed record StreamMetadata(
+    Dictionary<string, string> Properties // Protocol-specific KV pairs
+);
+
+public sealed record StreamFrame(
+    DateTimeOffset Timestamp,
+    StreamFrameDirection Direction,
+    string? TextPayload,
+    byte[]? BinaryPayload,
+    long SizeBytes
+);
+
+public enum StreamFrameDirection { Sent, Received }
+```
+
+### 4.3 Capture Implementation
+
+The `CdpNetworkListener` is extended with protocol-specific listeners:
+
+- **WebSocketListener** — attaches to CDP `Network.webSocketCreated`, `Network.webSocketFrameSent`, `Network.webSocketFrameReceived`, `Network.webSocketClosed`. Stores frame history up to a configurable limit (default: 1000 frames per connection).
+- **WebRtcListener** — attaches to CDP to capture `RTCPeerConnection` creation, SDP offer/answer exchange, ICE candidate gathering. Optionally captures a short RTP sample (configurable duration, default: 10 seconds) by intercepting the media stream via `chrome.tabCapture` or CDP's media domain.
+- **MediaStreamListener** — detects HLS manifests (`.m3u8`) and DASH manifests (`.mpd`) in network traffic. Parses manifest content to extract codec info, bitrates, segment URLs. Optionally downloads a configurable number of sample segments (default: 3).
+- **BinaryProtocolDetector** — identifies gRPC-Web (content-type `application/grpc-web`), Protobuf (content-type `application/x-protobuf` or binary bodies with Protobuf wire format heuristics), and other binary formats.
+
+All listeners store their data via a new `IStreamCatalog` interface (extension of `IEndpointCatalog`).
+
+### 4.3.1 Extensible Protocol Listener Interface
+
+The built-in listeners (WebSocket, WebRTC, HLS/DASH, gRPC-Web, SSE) are implementations of a pluggable interface:
+
+```csharp
+public interface IProtocolListener
+{
+    string ProtocolName { get; }
+    StreamProtocol Protocol { get; }
+    bool CanAttach(ICdpSession cdpSession); // Can this listener work with the current CDP session?
+    Task AttachAsync(ICdpSession cdpSession, IStreamCatalog catalog, CancellationToken ct = default);
+    Task DetachAsync(CancellationToken ct = default);
+}
+```
+
+Custom protocol listeners can be registered via the DI container (`services.AddProtocolListener<MyCustomListener>()`) or discovered from adapter assemblies. This allows future support for WebTransport, MQTT-over-WebSocket, WebCodecs, or any other protocol without modifying Iaet.Capture itself.
+
+The `ICdpSession` abstraction wraps Playwright's CDP access, providing subscribe/unsubscribe for CDP domains and event handling. This keeps listeners testable without a real browser.
+
+### 4.4 Selective Payload Capture
+
+Media payloads are large. IAET captures selectively:
+
+- **Default: metadata only** — signaling, manifests, frame types/sizes, codec info. No audio/video bytes.
+- **`--capture-samples` flag** — enables short payload captures per the protocol-specific defaults (10s RTP, 3 HLS segments, 1000 WebSocket frames).
+- **`--capture-duration <seconds>`** — overrides the sample duration for time-based protocols (WebRTC, SSE).
+- **`--capture-frames <count>`** — overrides the frame count for message-based protocols (WebSocket).
+- **Sample storage** — binary samples stored in `captures/<session-id>/samples/` directory (gitignored). Catalog stores the file path reference.
+
+### 4.5 Path to Full Stream Recording (Phase C)
+
+The architecture is designed so that switching from selective samples to full recording requires:
+1. Removing the frame/duration limits in listeners
+2. Adding streaming-to-disk for large payloads (instead of in-memory buffering)
+3. Building analysis tooling (Protobuf field inference, codec identification, WebSocket message schema inference)
+
+The catalog schema, stream models, and file-path-based payload references already support unlimited data. The limits are in the listeners, not the storage layer.
+
+### 4.6 Schema Inference for Non-JSON Protocols
+
+`ISchemaInferrer` is extended to handle:
+
+- **WebSocket text frames** — if JSON, same inference as HTTP responses. If structured text, pattern detection.
+- **Protobuf payloads** — field number + wire type extraction from raw bytes. Produces a tentative `.proto` definition with numbered fields and inferred types (varint, fixed64, length-delimited). Multiple samples improve inference.
+- **gRPC-Web** — deframe the gRPC envelope, apply Protobuf inference to the payload.
+- **Non-JSON HTTP responses** — XML schema inference, binary format detection.
+
+### 4.7 CLI Commands for Stream Discovery
+
+```
+iaet
+├── capture
+│   ├── start          (existing — extended with --capture-samples, --capture-duration)
+│   └── ...
+├── streams
+│   ├── list           List discovered streams for a session
+│   ├── show           Show stream details (metadata, frame summary)
+│   ├── frames         Show frame history for a WebSocket/SSE stream
+│   └── sample         View or export a captured payload sample
+├── ...
+```
+
+### 4.8 Browser Extension Support
+
+Both browser extensions capture stream metadata alongside HTTP traffic:
+
+- **iaet-devtools** — shows a "Streams" tab alongside the "Requests" tab. WebSocket connections, WebRTC peer connections, and media streams appear in real-time with protocol badges.
+- **iaet-capture** — background capture includes WebSocket frame logging and basic WebRTC signaling detection.
+
+Stream data is included in the `.iaet.json` export format:
+
+```json
+{
+  "version": "1.0",
+  "session": { ... },
+  "requests": [ ... ],
+  "streams": [
+    {
+      "id": "uuid",
+      "protocol": "WebSocket",
+      "url": "wss://dealer.spotify.com/",
+      "startedAt": "2026-03-26T10:01:00Z",
+      "metadata": {
+        "subprotocol": "spotify-internal",
+        "frameCount": 847
+      },
+      "frames": [
+        {
+          "timestamp": "2026-03-26T10:01:01Z",
+          "direction": "Received",
+          "textPayload": "{\"type\":\"ping\"}",
+          "sizeBytes": 15
+        }
+      ]
+    }
+  ]
+}
+```
+
+## 5. Assemblies — New
+
+### 5.1 Iaet.Schema — Schema Inference Engine
 
 Given N captured JSON response bodies for the same endpoint, produces:
 
@@ -102,7 +274,7 @@ public interface ISchemaInferrer
 
 **Implementation approach:** Parse each JSON body into a structural type map (field → observed types). Merge across all bodies. Generate outputs from the merged map. Use `System.Text.Json` for parsing, string templates for C# generation, JSON Schema libraries for schema output.
 
-### 4.2 Iaet.Replay — HTTP Replay + Diff Engine
+### 5.2 Iaet.Replay — HTTP Replay + Diff Engine
 
 Re-issues a captured request against the live API and compares:
 
@@ -125,7 +297,7 @@ public interface IReplayEngine
 - Dry-run mode (show what would be sent without actually sending)
 - Diff output in multiple formats (text, JSON, HTML)
 
-### 4.3 Iaet.Crawler — Semi-Autonomous Site Discovery
+### 5.3 Iaet.Crawler — Semi-Autonomous Site Discovery
 
 Given a starting URL and boundary rules, systematically explores a web application:
 
@@ -155,7 +327,7 @@ iaet crawl --url https://open.spotify.com --max-pages 20 --max-depth 3
 iaet capture run --recipe docs/recipes/spotify-playlist-capture.ts
 ```
 
-### 4.4 Iaet.Export — Report and Artifact Generation
+### 5.4 Iaet.Export — Report and Artifact Generation
 
 Produces output from the catalog:
 
@@ -170,7 +342,7 @@ Produces output from the catalog:
 
 All exports operate on a session or set of sessions from the catalog. All sanitize credentials.
 
-### 4.5 Iaet.Explorer — Local Web UI
+### 5.5 Iaet.Explorer — Local Web UI
 
 A local ASP.NET Core app launched via `iaet explore`:
 
@@ -188,9 +360,9 @@ iaet explore --db catalog.db --port 9200
 # Opens browser to http://localhost:9200
 ```
 
-## 5. Browser Extensions
+## 6. Browser Extensions
 
-### 5.1 iaet-devtools — Chrome DevTools Panel
+### 6.1 iaet-devtools — Chrome DevTools Panel
 
 A panel inside Chrome DevTools:
 
@@ -202,7 +374,7 @@ A panel inside Chrome DevTools:
 
 **Tech:** Chrome Extension Manifest V3, TypeScript, Vite. Uses `chrome.devtools.network` API.
 
-### 5.2 iaet-capture — Background Content Script
+### 6.2 iaet-capture — Background Content Script
 
 Captures without DevTools open:
 
@@ -213,7 +385,7 @@ Captures without DevTools open:
 
 **Tech:** Chrome Extension Manifest V3, TypeScript, service worker background capture.
 
-### 5.3 CLI Integration — Import Command
+### 6.3 CLI Integration — Import Command
 
 ```bash
 # Import from extension export file
@@ -225,7 +397,7 @@ iaet import --listen --port 9222 --db catalog.db
 
 The `.iaet.json` format is a documented interchange schema (see `docs/capture-format.md`). Both extensions and the CLI produce/consume the same format.
 
-### 5.4 `.iaet.json` Interchange Format
+### 6.4 `.iaet.json` Interchange Format
 
 Top-level structure:
 
@@ -266,7 +438,7 @@ Top-level structure:
 - Format is JSON, file extension `.iaet.json`, UTF-8 encoded.
 - Full JSON Schema published at `docs/capture-format.md`.
 
-## 6. CLI Command Reference
+## 7. CLI Command Reference
 
 ```
 iaet
@@ -300,7 +472,7 @@ iaet
 └── investigate        Guided interactive investigation wizard
 ```
 
-## 7. Investigation Wizard
+## 8. Investigation Wizard
 
 Guided interactive mode for beginners:
 
@@ -334,7 +506,7 @@ Captured 47 requests across 12 unique endpoints.
 
 The wizard wraps the same CLI commands with interactive prompts and helpful defaults. It's an onramp, not a separate system.
 
-## 8. Documentation Structure
+## 9. Documentation Structure
 
 ### Top-Level README.md
 
@@ -368,7 +540,7 @@ Each `src/Iaet.*/` directory has:
 - `docs/recipes/spotify-playlist-capture.ts` — Playwright recipe examples
 - `docs/recipes/github-api-discovery.ts` — another recipe
 
-## 9. GVResearch Integration Update
+## 10. GVResearch Integration Update
 
 After IAET extraction, GVResearch becomes a pure consumer:
 
@@ -398,7 +570,7 @@ GVResearch repo (consumes IAET):
 
 GVResearch also retargets to .NET 10 to match IAET.
 
-## 10. Repo Structure
+## 11. Repo Structure
 
 ```
 iaet/
@@ -453,7 +625,7 @@ iaet/
   .editorconfig
 ```
 
-## 11. Catalog Evolution and Migration Strategy
+## 12. Catalog Evolution and Migration Strategy
 
 The SQLite catalog schema will grow as new assemblies store additional data (crawl results, schema inference results, replay diffs, annotations). Strategy:
 
@@ -462,7 +634,7 @@ The SQLite catalog schema will grow as new assemblies store additional data (cra
 - Users with existing catalog databases get automatic schema upgrades on next `iaet` command invocation.
 - Non-destructive migrations only — no dropping columns or tables.
 
-### 11.1 Catalog Interface Extensions
+### 12.1 Catalog Interface Extensions
 
 `IEndpointCatalog` will be extended with:
 - `GetResponseBodiesAsync(Guid sessionId, string normalizedSignature)` — needed by Schema inference
@@ -482,7 +654,7 @@ public sealed record Annotation(
 public enum StabilityRating { Unknown, Stable, Unstable, Deprecated }
 ```
 
-## 12. NuGet Packaging Strategy
+## 13. NuGet Packaging Strategy
 
 - **Package ID prefix:** `Iaet.` (e.g., `Iaet.Core`, `Iaet.Capture`, `Iaet.Catalog`)
 - **Versioning:** All packages share the same SemVer version, released together. Simplifies dependency management for consumers. Version format: `MAJOR.MINOR.PATCH` (e.g., `1.0.0`, `1.1.0`, `2.0.0`).
@@ -490,7 +662,7 @@ public enum StabilityRating { Unknown, Stable, Unstable, Deprecated }
 - **CI/CD:** GitHub Actions workflow: build → test → pack → publish on tagged commits (`v1.0.0`).
 - **Local development:** Consumers (like GVResearch) use a local NuGet package source during development: `nuget.config` pointing to `../iaet/artifacts/`.
 
-## 13. Recipe Runner Architecture
+## 14. Recipe Runner Architecture
 
 Recipes are Playwright scripts that define browser interactions while IAET captures traffic.
 
@@ -512,11 +684,11 @@ Recipes are Playwright scripts that define browser interactions while IAET captu
 - No direct catalog/schema access — recipes are pure browser automation
 - Recipes can export tags via `page.evaluate(() => window.__iaet_tag = "login")` convention
 
-## 14. Capture Tests (Iaet.Capture.Tests)
+## 15. Capture Tests (Iaet.Capture.Tests)
 
 Unit tests for `RequestSanitizer` (redacts correct headers, preserves non-sensitive ones) and `CdpNetworkListener` logic (drains captured requests, handles empty state). Browser-dependent integration tests (actual Playwright capture) remain manual.
 
-## 15. Technology Stack
+## 16. Technology Stack
 
 | Concern | Choice | Rationale |
 |---|---|---|
@@ -533,15 +705,16 @@ Unit tests for `RequestSanitizer` (redacts correct headers, preserves non-sensit
 | Testing | xUnit + FluentAssertions + NSubstitute | Same as GVResearch for consistency |
 | Build | PowerShell (pwsh) | Cross-platform build script |
 
-## 16. Phased Implementation
+## 17. Phased Implementation
 
 | Phase | Focus | Deliverables |
 |---|---|---|
-| **1 — Extract + Retarget** | Move existing Iaet.* code to new repo, retarget to .NET 10, set up CI | Working `iaet capture` + `iaet catalog` on .NET 10 |
-| **2 — Schema + Replay** | Build Iaet.Schema and Iaet.Replay | `iaet schema infer` + `iaet replay run` |
-| **3 — Export + Documentation** | Build Iaet.Export, write all documentation and tutorials | All export formats, comprehensive README, tutorials |
-| **4 — Crawler** | Build Iaet.Crawler with boundary rules and recipe support | `iaet crawl` + recipe runner |
-| **5 — Explorer** | Build Iaet.Explorer local web UI | `iaet explore` with endpoint browser and interactive replay |
-| **6 — Browser Extensions** | Build iaet-devtools and iaet-capture Chrome extensions | Both extensions + `iaet import` command |
-| **7 — Investigation Wizard** | Build guided interactive mode | `iaet investigate` |
-| **8 — GVResearch Update** | Update GVResearch to consume IAET packages, retarget to .NET 10 | GVResearch builds against IAET NuGet packages |
+| **1 — Extract + Retarget** | Move existing Iaet.* code to new repo, retarget to .NET 10, set up CI, create GitHub repo | Working `iaet capture` + `iaet catalog` on .NET 10 |
+| **2 — Stream Capture** | Extend Capture with WebSocket, WebRTC, media stream, and binary protocol listeners. Extend Catalog with `CapturedStream` storage. | `iaet capture start --capture-samples`, `iaet streams list/show/frames` |
+| **3 — Schema + Replay** | Build Iaet.Schema (JSON + Protobuf inference) and Iaet.Replay | `iaet schema infer` + `iaet replay run` |
+| **4 — Export + Documentation** | Build Iaet.Export, write all documentation and tutorials | All export formats, comprehensive README, tutorials |
+| **5 — Crawler** | Build Iaet.Crawler with boundary rules and recipe support | `iaet crawl` + recipe runner |
+| **6 — Explorer** | Build Iaet.Explorer local web UI with stream viewer | `iaet explore` with endpoint browser, stream viewer, and interactive replay |
+| **7 — Browser Extensions** | Build iaet-devtools and iaet-capture Chrome extensions with stream support | Both extensions + `iaet import` command |
+| **8 — Investigation Wizard** | Build guided interactive mode | `iaet investigate` |
+| **9 — GVResearch Update** | Update GVResearch to consume IAET packages, retarget to .NET 10 | GVResearch builds against IAET NuGet packages |
