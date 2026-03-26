@@ -16,28 +16,25 @@ This spec defines the extraction of IAET from the GVResearch repo into its own s
 
 ## 2. Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     IAET Toolkit                              │
-│                                                              │
-│  Iaet.Core          (contracts + models)                     │
-│  Iaet.Capture       (Playwright CDP capture)                 │
-│  Iaet.Catalog       (SQLite endpoint catalog)                │
-│  Iaet.Schema        (JSON Schema / C# / OpenAPI inference)   │
-│  Iaet.Replay        (HTTP replay + diff engine)              │
-│  Iaet.Crawler       (semi-autonomous site crawler)           │
-│  Iaet.Export        (reports, Postman, OpenAPI, HAR, C#)     │
-│  Iaet.Explorer      (local Swagger-like web UI)              │
-│  Iaet.Cli           (dotnet tool entry point)                │
-│                                                              │
-│  Iaet.Adapters.*    (pluggable per-target adapters)          │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│  Browser Extensions                                          │
-│                                                              │
-│  iaet-devtools/     (Chrome DevTools panel)                   │
-│  iaet-capture/      (Content script background capture)       │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph IAETToolkit["IAET Toolkit"]
+        IaetCore["Iaet.Core\n(contracts + models)"]
+        IaetCapture["Iaet.Capture\n(Playwright CDP capture)"]
+        IaetCatalog["Iaet.Catalog\n(SQLite endpoint catalog)"]
+        IaetSchema["Iaet.Schema\n(JSON Schema / C# / OpenAPI inference)"]
+        IaetReplay["Iaet.Replay\n(HTTP replay + diff engine)"]
+        IaetCrawler["Iaet.Crawler\n(semi-autonomous site crawler)"]
+        IaetExport["Iaet.Export\n(reports, Postman, OpenAPI, HAR, C#)"]
+        IaetExplorer["Iaet.Explorer\n(local Swagger-like web UI)"]
+        IaetCli["Iaet.Cli\n(dotnet tool entry point)"]
+        IaetAdapters["Iaet.Adapters.*\n(pluggable per-target adapters)"]
+    end
+
+    subgraph BrowserExtensions["Browser Extensions"]
+        DevTools["iaet-devtools\n(Chrome DevTools panel)"]
+        CaptureExt["iaet-capture\n(Content script background capture)"]
+    end
 ```
 
 **Dependency rules:**
@@ -555,17 +552,25 @@ After IAET extraction, GVResearch becomes a pure consumer:
 - `GvResearch.Api`, `GvResearch.Sip`, `GvResearch.Softphone` — unchanged
 
 **New dependency chain:**
-```
-IAET repo (NuGet packages):
-  Iaet.Core, Iaet.Capture, Iaet.Catalog, etc.
-  iaet CLI (dotnet tool)
+```mermaid
+graph TD
+    subgraph IAETRepo["IAET repo (NuGet packages)"]
+        IaetPkgs["Iaet.Core, Iaet.Capture, Iaet.Catalog, etc."]
+        IaetCli["iaet CLI (dotnet tool)"]
+    end
 
-GVResearch repo (consumes IAET):
-  Iaet.Adapters.GoogleVoice  → Iaet.Core package
-  GvResearch.Shared           → Iaet.Core package
-  GvResearch.Api              → GvResearch.Shared
-  GvResearch.Sip              → GvResearch.Shared
-  GvResearch.Softphone        → no IAET dependency
+    subgraph GVResearchRepo["GVResearch repo (consumes IAET)"]
+        GVAdapter["Iaet.Adapters.GoogleVoice"]
+        GVShared["GvResearch.Shared"]
+        GVApi["GvResearch.Api"]
+        GVSip["GvResearch.Sip"]
+        GVSoftphone["GvResearch.Softphone\n(no IAET dependency)"]
+    end
+
+    IaetPkgs -->|NuGet package| GVAdapter
+    IaetPkgs -->|NuGet package| GVShared
+    GVShared --> GVApi
+    GVShared --> GVSip
 ```
 
 GVResearch also retargets to .NET 10 to match IAET.
