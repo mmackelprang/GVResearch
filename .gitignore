@@ -10,9 +10,10 @@ obj/
 publish/
 artifacts/
 
-## Secrets and captures
-captures/
-*.enc
+## Secrets and captures (raw captures gitignored, research exports tracked)
+captures/*.raw
+captures/*.enc
+!captures/iaet-exports/
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json

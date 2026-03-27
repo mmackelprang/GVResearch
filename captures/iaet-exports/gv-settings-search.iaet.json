@@ -1,0 +1,214 @@
+{
+  "iaetVersion": "1.0",
+  "exportedAt": "2026-03-27T15:26:34.852589Z",
+  "session": {
+    "id": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+    "name": "gv-settings-search-investigation",
+    "targetApplication": "Google Voice",
+    "profile": "default",
+    "startedAt": "2026-03-27T15:26:34.852589Z",
+    "stoppedAt": "2026-03-27T15:26:34.852589Z",
+    "capturedBy": "playwright-mcp/1.0"
+  },
+  "requests": [
+    {
+      "id": "cc1d91d8-33d4-4288-9a3f-eb292ac36c74",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/inboundcallrule/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"rules\":[]}",
+      "durationMs": 0,
+      "tag": "settings-call-rules"
+    },
+    {
+      "id": "4f5a97fd-fe17-4535-9dbe-634daf142bb5",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/search",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[\"Tim\",20]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"results\":[]}",
+      "durationMs": 0,
+      "tag": "search-query"
+    },
+    {
+      "id": "07f4e510-635e-4708-b105-0bbb68f9728e",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/search",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[\"Tim\",20]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"results\":[]}",
+      "durationMs": 0,
+      "tag": "search-query-2"
+    },
+    {
+      "id": "eb02b2c3-1cd1-4657-a40f-c3cf97add246",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://peoplestack-pa.clients6.google.com/$rpc/peoplestack.PeopleStackAutocompleteService/Autocomplete",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{\"query\":\"Tim\"}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"contacts\":[{\"name\":\"Tim Wilson\",\"phones\":[{\"number\":\"+15207449455\",\"type\":\"home\"},{\"number\":\"+15209074356\",\"type\":\"mobile\"}]}]}",
+      "durationMs": 0,
+      "tag": "contact-autocomplete"
+    },
+    {
+      "id": "4198a7f4-d9cd-4a53-a692-639419f86153",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://peoplestack-pa.clients6.google.com/$rpc/peoplestack.PeopleStackAutocompleteService/Lookup",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{\"ids\":[]}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"contacts\":[]}",
+      "durationMs": 0,
+      "tag": "contact-lookup"
+    },
+    {
+      "id": "f0b58473-a7f7-43a6-9951-ea64657321fc",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://peoplestack-pa.clients6.google.com/$rpc/peoplestack.PeopleStackAutocompleteService/Warmup",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{}",
+      "durationMs": 0,
+      "tag": "contact-warmup"
+    },
+    {
+      "id": "a5e988f1-a9f5-4343-884a-d0806fd478b7",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://people-pa.clients6.google.com/$rpc/google.internal.people.v2.InternalPeopleService/GetContactGroups",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"groups\":[]}",
+      "durationMs": 0,
+      "tag": "people-contact-groups"
+    },
+    {
+      "id": "41a03310-41b3-45d2-adda-66b2be1ca9d7",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://people-pa.clients6.google.com/$rpc/google.internal.people.v2.InternalPeopleService/ListContactGroups",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"groups\":[]}",
+      "durationMs": 0,
+      "tag": "people-list-groups"
+    },
+    {
+      "id": "7b0e4646-90c2-49c6-bed8-d33b2d7feb5d",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://voice.clients6.google.com/$rpc/google.voice.ringgroups.v1.RingGroupsService/ListRingGroups",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"ringGroups\":[]}",
+      "durationMs": 0,
+      "tag": "ring-groups"
+    },
+    {
+      "id": "99b3519c-c54a-422f-b1d8-5512ca576181",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://signaler-pa.clients6.google.com/punctual/v1/chooseServer",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"server\":\"signaler-pa.clients6.google.com\"}",
+      "durationMs": 0,
+      "tag": "signaler-choose-server"
+    },
+    {
+      "id": "ca47d44e-b0e3-4a7b-9957-f7a8dc0f8914",
+      "sessionId": "b18e7ead-8bcf-4bef-ad92-3b5c9cfa7386",
+      "timestamp": "2026-03-27T15:26:34.852589Z",
+      "httpMethod": "POST",
+      "url": "https://accounts.google.com/ListAccounts",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{\"authuser\":0}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"accounts\":[]}",
+      "durationMs": 0,
+      "tag": "google-list-accounts"
+    }
+  ],
+  "streams": []
+}

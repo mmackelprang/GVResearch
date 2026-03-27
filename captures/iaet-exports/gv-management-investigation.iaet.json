@@ -1,0 +1,214 @@
+{
+  "iaetVersion": "1.0",
+  "exportedAt": "2026-03-27T15:21:14.783673Z",
+  "session": {
+    "id": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+    "name": "gv-management-investigation",
+    "targetApplication": "Google Voice",
+    "profile": "default",
+    "startedAt": "2026-03-27T15:21:14.783673Z",
+    "stoppedAt": "2026-03-27T15:21:14.783673Z",
+    "capturedBy": "playwright-mcp/1.0"
+  },
+  "requests": [
+    {
+      "id": "dfc52fa6-f01c-44ba-8e8d-6e415595c050",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"c.CihXTUtJ...\",null,null,1],[null,null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"c.CihXTUtJ...\",0,0,1,[1,4],0,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "delete-vm-mark-read"
+    },
+    {
+      "id": "8415c489-bdf0-419c-80f1-54911d5d2219",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchdelete",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[\"c.CihXTUtJ...\"]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[]",
+      "durationMs": 0,
+      "tag": "delete-vm"
+    },
+    {
+      "id": "9d645b52-70b6-4d95-92eb-f45424dbf45d",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"c.CihNVlRQ...\",null,null,null,null,1],[null,null,null,null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"c.CihNVlRQ...\",0,0,1,[6],1,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "archive-thread"
+    },
+    {
+      "id": "e0b64ef2-5f2d-44e9-b001-bf08275b2d59",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"t.40829\",null,1],[null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"t.40829\",0,1,1,[5],0,\"\",2]]]]",
+      "durationMs": 0,
+      "tag": "mark-spam"
+    },
+    {
+      "id": "bc882ec0-56c9-4f61-9cf0-fbfc6446a2e9",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[\"t.22000\",100,\"1520274041373\",[null,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"thread\":\"t.22000\",\"messages\":[{\"text\":\"Your Google verification code is 408537\"},{\"text\":\"G-102045 is your Google verification code.\"}]}",
+      "durationMs": 0,
+      "tag": "get-single-thread"
+    },
+    {
+      "id": "a92de2a3-0cae-45d1-9816-bfac87e530c0",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchdelete",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[\"t.38245\"]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[]",
+      "durationMs": 0,
+      "tag": "delete-sms-thread"
+    },
+    {
+      "id": "21c2b600-15eb-4117-92e9-a18ec0cdc3b3",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"t.22000\",null,null,null,null,1],[null,null,null,null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"t.22000\",0,0,1,[6],1,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "archive-sms-thread"
+    },
+    {
+      "id": "9543bcb9-daae-4f1a-8df9-79330723996c",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"t.+19192634487\",1],[null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"t.+19192634487\",1,0,1,[1,2],0,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "toggle-unread"
+    },
+    {
+      "id": "781d69dc-beb5-460f-a79d-672184b01424",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[6,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"archive-list-type-6\"}",
+      "durationMs": 0,
+      "tag": "list-archive"
+    },
+    {
+      "id": "4c81b34f-c5c6-478c-878e-1cc847744d77",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[5,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"spam-list-type-5\"}",
+      "durationMs": 0,
+      "tag": "list-spam"
+    },
+    {
+      "id": "0844810c-12b7-4700-879b-8b3bc1b1696f",
+      "sessionId": "11cbf91b-5353-46bc-84de-0ef2f432645d",
+      "timestamp": "2026-03-27T15:21:14.783673Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[2,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"messages-list-type-2\"}",
+      "durationMs": 0,
+      "tag": "list-messages"
+    }
+  ],
+  "streams": []
+}

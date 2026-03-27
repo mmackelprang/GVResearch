@@ -1,0 +1,268 @@
+{
+  "iaetVersion": "1.0",
+  "exportedAt": "2026-03-27T14:59:34.091130Z",
+  "session": {
+    "id": "e474cc3f-7113-461d-8593-25df0611249e",
+    "name": "gv-voice-investigation",
+    "targetApplication": "Google Voice",
+    "profile": "default",
+    "startedAt": "2026-03-27T14:59:34.091130Z",
+    "stoppedAt": "2026-03-27T14:59:34.091130Z",
+    "capturedBy": "playwright-mcp/1.0"
+  },
+  "requests": [
+    {
+      "id": "bfeb9288-0774-44ee-a38f-a850fccf8901",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/threadinginfo/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[1,null,69],[4,null,69],[3,null,0],[5,null,281],[2,null,0]]]]",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "41995266-0050-45db-8e7a-70963fb61bbe",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[1,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"call-list-type-1\"}",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "341e169b-4ba8-4b27-95b5-fa5b83605cbd",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[4,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"voicemail-list-type-4\"}",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "ca4293c4-82a4-458d-a830-862bc2b808f9",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/account/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[null,1]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"phone\":\"+19196706660\",\"devices\":[\"Android Device\"]}",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "3736d715-c587-419f-acd8-a90f48b6e3c3",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/sipregisterinfo/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[3,\"J9pYB8HMVJIJ\"]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"token\":\"REDACTED\",\"crypto\":\"REDACTED\"}",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "15ffcc6a-1767-4455-bfaa-79b2eab18d8c",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/getnumberportinfo",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[]",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "f50a7565-7bc3-421d-a209-178ced807703",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/numbertransfer/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[]",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "0a5e4551-47d3-4023-ba44-8d1e5de8653a",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/markallread",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": null,
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[]",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "4059006d-fb3d-4228-8758-3a207620b21e",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"threadId\",null,null,1],[null,null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"threadId\",0,0,1,[1,4],0,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "voice-api"
+    },
+    {
+      "id": "6243220e-ddb3-467a-8a43-fa58a5a5bddd",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "WEBRTC",
+      "url": "webrtc://peer-0/setLocalDescription",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{\"type\": \"offer\", \"sdp\": \"v=0\\r\\no=- 8016293937996395359 2 IN IP4 127.0.0.1\\r\\ns=-\\r\\nt=0 0\\r\\na=group:BUNDLE 0\\r\\na=extmap-allow-mixed\\r\\na=msid-semantic: WMS\\r\\nm=audio 9 UDP/TLS/RTP/SAVPF 111 63 9 0 8 13 110 126\\r\\nc=IN IP4 0.0.0.0\\r\\na=rtcp:9 IN IP4 0.0.0.0\\r\\na=ice-ufrag:WfCl\\r\\na=ice-pwd:REDACTED\\r\\na=ice-options:trickle\\r\\na=fingerprint:sha-256 REDACTED\\r\\na=setup:actpass\\r\\na=mid:0\\r\\na=sendrecv\\r\\na=rtcp-mux\\r\\na=rtcp-rsize\\r\\na=rtpmap:111 opus/48000/2\\r\\na=rtcp-fb:111 transport-cc\\r\\na=fmtp:111 minptime=10;useinbandfec=1\\r\\na=rtpmap:63 red/48000/2\\r\\na=rtpmap:9 G722/8000\\r\\na=rtpmap:0 PCMU/8000\\r\\na=rtpmap:8 PCMA/8000\\r\\na=rtpmap:13 CN/8000\\r\\na=rtpmap:110 telephone-event/48000\\r\\na=rtpmap:126 telephone-event/8000\\r\\n\"}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": null,
+      "durationMs": 0,
+      "tag": "webrtc-sdp-offer"
+    },
+    {
+      "id": "c48c59ca-8c85-418e-a13c-d6c08ce52173",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "WEBRTC",
+      "url": "webrtc://peer-0/setRemoteDescription",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": null,
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"type\": \"answer\", \"sdp\": \"v=0\\r\\no=xavier 1774623246387 1774623247 IN IP4 74.125.39.87\\r\\ns=SIP Call\\r\\nc=IN IP4 74.125.39.87\\r\\nt=0 0\\r\\na=sendrecv\\r\\na=ice-lite\\r\\na=ice-ufrag:REDACTED\\r\\na=ice-pwd:REDACTED\\r\\na=group:BUNDLE 0\\r\\na=fingerprint:sha-256 REDACTED\\r\\na=setup:passive\\r\\nm=audio 26500 UDP/TLS/RTP/SAVPF 111 110\\r\\na=rtpmap:111 opus/48000/2\\r\\na=rtpmap:110 telephone-event/48000\\r\\na=candidate:1 1 UDP 1 74.125.39.87 26500 typ host\\r\\na=candidate:2 1 UDP 2 2001:4860:4864:2::87 26500 typ host\\r\\na=mid:0\\r\\na=sendrecv\\r\\na=rtcp-mux\\r\\n\"}",
+      "durationMs": 898,
+      "tag": "webrtc-sdp-answer"
+    },
+    {
+      "id": "89c619e7-59f1-4a80-a7aa-aab443d2ba84",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "WEBRTC",
+      "url": "webrtc://peer-0/connectionTimeline",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "{\"config\": {\"iceServers\": [{\"urls\": [\"stun:stun.l.google.com:19302\"]}]}}",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[{\"type\": \"signalingstate\", \"state\": \"have-local-offer\", \"ts_offset\": 1}, {\"type\": \"iceconnectionstate\", \"state\": \"checking\", \"ts_offset\": 899}, {\"type\": \"signalingstate\", \"state\": \"stable\", \"ts_offset\": 899}, {\"type\": \"track\", \"kind\": \"audio\", \"ts_offset\": 905}, {\"type\": \"connectionstate\", \"state\": \"connecting\", \"ts_offset\": 907}, {\"type\": \"iceconnectionstate\", \"state\": \"connected\", \"ts_offset\": 1118}, {\"type\": \"connectionstate\", \"state\": \"connected\", \"ts_offset\": 1307}]",
+      "durationMs": 1307,
+      "tag": "webrtc-timeline"
+    },
+    {
+      "id": "d6b9f971-1dbf-4592-b28e-1faa585dbed2",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "WEBRTC",
+      "url": "webrtc://peer-0/iceCandidate/0",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "candidate:1076934676 1 udp 2122129151 REDACTED 56302 typ host",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": null,
+      "durationMs": 0,
+      "tag": "webrtc-ice"
+    },
+    {
+      "id": "ad0ebe96-8673-49aa-8df2-955ada183b51",
+      "sessionId": "e474cc3f-7113-461d-8593-25df0611249e",
+      "timestamp": "2026-03-27T14:59:34.091130Z",
+      "httpMethod": "WEBRTC",
+      "url": "webrtc://peer-0/iceCandidate/1",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "candidate:2180968286 1 udp 1685921535 REDACTED 56302 typ srflx raddr REDACTED rport 56302",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": null,
+      "durationMs": 0,
+      "tag": "webrtc-ice"
+    }
+  ],
+  "streams": []
+}

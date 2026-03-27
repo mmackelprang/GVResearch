@@ -1,0 +1,178 @@
+{
+  "iaetVersion": "1.0",
+  "exportedAt": "2026-03-27T15:12:00.638463Z",
+  "session": {
+    "id": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+    "name": "gv-sms-investigation",
+    "targetApplication": "Google Voice",
+    "profile": "default",
+    "startedAt": "2026-03-27T15:12:00.638463Z",
+    "stoppedAt": "2026-03-27T15:12:00.638463Z",
+    "capturedBy": "playwright-mcp/1.0"
+  },
+  "requests": [
+    {
+      "id": "380e9882-8321-4244-9a42-dcfa20f5aad3",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/threadinginfo/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[1,null,69],[4,null,69],[3,null,0],[5,null,281],[2,null,0]]]]",
+      "durationMs": 0,
+      "tag": "sms-open"
+    },
+    {
+      "id": "5c37d06d-1fc9-4b70-a571-814287f174a2",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[1,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"threads\":\"call-list\"}",
+      "durationMs": 0,
+      "tag": "sms-open"
+    },
+    {
+      "id": "be5c62c2-081d-4c2c-92a0-dd883fecfdad",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/thread/batchupdateattributes",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[[[[\"t.+19193718044\",null,null,1],[null,null,null,1],1]]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[\"t.+19193718044\",0,0,1,[1,2],0,\"\",0]]]]",
+      "durationMs": 0,
+      "tag": "sms-mark-read"
+    },
+    {
+      "id": "bef8dd8b-8b52-4011-be68-daea959f4850",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/sendsms",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[null,null,null,null,\"Here is a test message.\",\"t.+19193718044\",null,null,[207431086612864]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[null,\"t.+19193718044\",\"f58503c82e8488db4ef4b4eb9f4671a6421261b7\",1774624236185,[1,2]]",
+      "durationMs": 0,
+      "tag": "sms-send"
+    },
+    {
+      "id": "250b04c9-0784-4606-ad42-09eee78f490a",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/threadinginfo/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[1,null,69],[4,null,69],[3,null,0],[5,null,281],[2,null,0]]]]",
+      "durationMs": 0,
+      "tag": "sms-post-send"
+    },
+    {
+      "id": "b4a416be-da7c-469a-ba54-d3c7ad01aefa",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[1,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"thread\": \"t.+19193718044\", \"messages\": [{\"id\": \"f58503c8...\", \"ts\": 1774624236185, \"from\": \"+19196706660\", \"to\": \"+19193718044\", \"type\": 11, \"text\": \"Here is a test message.\", \"direction\": \"sent\", \"read\": 1}]}",
+      "durationMs": 0,
+      "tag": "sms-post-send-list"
+    },
+    {
+      "id": "714f826e-ee80-416f-b455-16ccd4301da2",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/account/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[null,1]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"phone\":\"+19196706660\"}",
+      "durationMs": 0,
+      "tag": "sms-account-refresh"
+    },
+    {
+      "id": "d25f2c98-a759-472e-aed4-d9137e6f222f",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/threadinginfo/get",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "[[[[1,null,70],[4,null,69],[3,null,0],[5,null,281],[2,null,1]]]]",
+      "durationMs": 0,
+      "tag": "sms-receive-notification"
+    },
+    {
+      "id": "df318ebb-2efe-473b-89fc-c740745ee060",
+      "sessionId": "4957080a-5dfd-49bf-998c-e7033f7d75d7",
+      "timestamp": "2026-03-27T15:12:00.638463Z",
+      "httpMethod": "POST",
+      "url": "https://clients6.google.com/voice/v1/voiceclient/api2thread/list",
+      "requestHeaders": {
+        "content-type": "application/json+protobuf"
+      },
+      "requestBody": "[1,20,15,null,null,[null,1,1,1]]",
+      "responseStatus": 200,
+      "responseHeaders": {
+        "content-type": "application/json+protobuf; charset=UTF-8"
+      },
+      "responseBody": "{\"thread\": \"t.+19193718044\", \"messages\": [{\"id\": \"ea6fd17a...\", \"ts\": 1774624253799, \"from\": \"+19193718044\", \"to\": \"+19196706660\", \"type\": 10, \"text\": \"And here is a reply\", \"direction\": \"received\", \"read\": 0}, {\"id\": \"f58503c8...\", \"ts\": 1774624236185, \"from\": \"+19196706660\", \"to\": \"+19193718044\", \"type\": 11, \"text\": \"Here is a test message.\", \"direction\": \"sent\", \"read\": 1}]}",
+      "durationMs": 0,
+      "tag": "sms-receive-thread-refresh"
+    }
+  ],
+  "streams": []
+}
