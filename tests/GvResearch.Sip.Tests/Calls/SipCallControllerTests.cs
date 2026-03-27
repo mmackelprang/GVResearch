@@ -9,18 +9,17 @@ namespace GvResearch.Sip.Tests.Calls;
 
 public sealed class SipCallControllerTests : IDisposable
 {
-    private readonly IGvCallService _callService = Substitute.For<IGvCallService>();
+    private readonly IGvCallClient _callClient = Substitute.For<IGvCallClient>();
     private readonly SipCallController _controller;
 
     public SipCallControllerTests()
     {
-        _controller = new SipCallController(_callService, NullLogger<SipCallController>.Instance);
+        _controller = new SipCallController(_callClient, NullLogger<SipCallController>.Instance);
     }
 
     public void Dispose()
     {
         _controller.Dispose();
-        _callService.Dispose();
     }
 
     [Fact]
@@ -28,17 +27,15 @@ public sealed class SipCallControllerTests : IDisposable
     {
         // Arrange
         const string sipCallId = "call-abc-123";
-        const string fromNumber = "+16505551234";
         const string destination = "+14155559876";
         const string gvCallId = "gv-call-xyz";
 
-        _callService
-            .InitiateCallAsync(fromNumber, destination, Arg.Any<CancellationToken>())
+        _callClient
+            .InitiateAsync(destination, Arg.Any<CancellationToken>())
             .Returns(GvCallResult.Ok(gvCallId));
 
         // Act
-        var session = await _controller.CreateOutboundCallAsync(
-            sipCallId, fromNumber, destination);
+        var session = await _controller.CreateOutboundCallAsync(sipCallId, destination);
 
         // Assert
         session.Should().NotBeNull();
@@ -47,8 +44,8 @@ public sealed class SipCallControllerTests : IDisposable
         session.State.Should().Be(CallState.Ringing);
         session.DestinationNumber.Should().Be(destination);
 
-        await _callService.Received(1)
-            .InitiateCallAsync(fromNumber, destination, Arg.Any<CancellationToken>());
+        await _callClient.Received(1)
+            .InitiateAsync(destination, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -56,16 +53,14 @@ public sealed class SipCallControllerTests : IDisposable
     {
         // Arrange
         const string sipCallId = "call-fail-456";
-        const string fromNumber = "+16505551234";
         const string destination = "+14155559876";
 
-        _callService
-            .InitiateCallAsync(fromNumber, destination, Arg.Any<CancellationToken>())
+        _callClient
+            .InitiateAsync(destination, Arg.Any<CancellationToken>())
             .Returns(GvCallResult.Fail("GV service unavailable"));
 
         // Act
-        var session = await _controller.CreateOutboundCallAsync(
-            sipCallId, fromNumber, destination);
+        var session = await _controller.CreateOutboundCallAsync(sipCallId, destination);
 
         // Assert
         session.Should().BeNull();
@@ -81,15 +76,15 @@ public sealed class SipCallControllerTests : IDisposable
         const string sipCallId = "call-hangup-789";
         const string gvCallId = "gv-hangup-xyz";
 
-        _callService
-            .InitiateCallAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _callClient
+            .InitiateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(GvCallResult.Ok(gvCallId));
 
-        _callService
+        _callClient
             .HangupAsync(gvCallId, Arg.Any<CancellationToken>())
-            .Returns(GvCallResult.Ok(gvCallId));
+            .Returns(Task.CompletedTask);
 
-        await _controller.CreateOutboundCallAsync(sipCallId, "+1111", "+2222");
+        await _controller.CreateOutboundCallAsync(sipCallId, "+2222");
 
         // Act
         await _controller.HangupAsync(sipCallId);
@@ -97,7 +92,7 @@ public sealed class SipCallControllerTests : IDisposable
         // Assert
         _controller.TryGetSession(sipCallId).Should().BeNull();
 
-        await _callService.Received(1)
+        await _callClient.Received(1)
             .HangupAsync(gvCallId, Arg.Any<CancellationToken>());
     }
 

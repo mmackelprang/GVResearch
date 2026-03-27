@@ -60,12 +60,10 @@ internal sealed class SipGatewayService : IHostedService
     {
         var request = e.Request;
         var destination = request.URI.User;
-        var from = _options.Value.Accounts.FirstOrDefault()?.Username ?? "unknown";
 
         // Fire-and-forget: any errors are logged inside CreateOutboundCallAsync.
         _ = _controller.CreateOutboundCallAsync(
             sipCallId: request.Header.CallId,
-            fromNumber: from,
             destinationNumber: destination);
     }
 
