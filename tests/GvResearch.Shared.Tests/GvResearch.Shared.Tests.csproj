@@ -11,6 +11,8 @@
     <NoWarn>$(NoWarn);CA2007</NoWarn>
     <!-- CA2000: HttpClient takes ownership of the HttpMessageHandler passed to its constructor -->
     <NoWarn>$(NoWarn);CA2000</NoWarn>
+    <!-- CA2213: DelegatingHandler disposes its inner handler; suppress double-dispose false positive -->
+    <NoWarn>$(NoWarn);CA2213</NoWarn>
     <!-- CA1515: test class types do not need to be internal -->
     <NoWarn>$(NoWarn);CA1515</NoWarn>
   </PropertyGroup>

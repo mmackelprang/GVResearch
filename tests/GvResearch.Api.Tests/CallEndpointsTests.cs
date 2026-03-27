@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using FluentAssertions;
-using GvResearch.Api.Models;
+using GvResearch.Shared.Exceptions;
 using GvResearch.Shared.Models;
 using GvResearch.Shared.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -13,30 +13,20 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace GvResearch.Api.Tests;
 
-/// <summary>
-/// Authentication handler that auto-authenticates every request,
-/// allowing integration tests to bypass real bearer-token validation.
-/// </summary>
 public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    /// <summary>The scheme name used in test configuration.</summary>
     public const string SchemeName = "Test";
 
-    /// <param name="options">Scheme options.</param>
-    /// <param name="logger">Logger factory.</param>
-    /// <param name="encoder">URL encoder.</param>
     public TestAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder)
-        : base(options, logger, encoder)
-    {
-    }
+        : base(options, logger, encoder) { }
 
-    /// <inheritdoc />
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var claims = new[] { new Claim(ClaimTypes.Name, "test-user") };
@@ -48,118 +38,141 @@ public sealed class TestAuthHandler : AuthenticationHandler<AuthenticationScheme
 }
 
 /// <summary>
-/// Factory that wires in the test auth handler and a mocked IGvCallService.
+/// Wraps an IGvClient mock so that DI disposal does not forward to the shared substitute.
+/// IGvClient : IAsyncDisposable — if DI owns disposal it would destroy the shared mock
+/// between tests. This wrapper intercepts DisposeAsync and does nothing.
 /// </summary>
-public sealed class CallEndpointsWebAppFactory : WebApplicationFactory<Program>
+internal sealed class NonDisposingClientWrapper : IGvClient
 {
-    /// <summary>Gets the NSubstitute mock for IGvCallService.</summary>
-    public IGvCallService CallService { get; } = Substitute.For<IGvCallService>();
+    private readonly IGvClient _inner;
 
-    /// <inheritdoc />
+    public NonDisposingClientWrapper(IGvClient inner) => _inner = inner;
+
+    public IGvAccountClient Account => _inner.Account;
+    public IGvThreadClient Threads => _inner.Threads;
+    public IGvSmsClient Sms => _inner.Sms;
+    public IGvCallClient Calls => _inner.Calls;
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+public sealed class GvApiWebAppFactory : WebApplicationFactory<Program>
+{
+    public IGvClient Client { get; } = Substitute.For<IGvClient>();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-
         builder.ConfigureServices(services =>
         {
-            // Replace real authentication with test scheme.
             services.AddAuthentication(TestAuthHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
                     TestAuthHandler.SchemeName, _ => { });
 
-            // Remove any previously registered IGvCallService.
-            var descriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(IGvCallService));
-            if (descriptor is not null)
-            {
-                services.Remove(descriptor);
-            }
+            var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IGvClient));
+            if (descriptor is not null) services.Remove(descriptor);
 
-            // Register the mock.
-            services.AddSingleton(CallService);
+            // Register via factory delegate so DI does not take disposal ownership of
+            // the shared NSubstitute mock. The wrapper's DisposeAsync is a no-op.
+            services.AddSingleton<IGvClient>(_ => new NonDisposingClientWrapper(Client));
         });
     }
 }
 
-/// <summary>Integration tests for the call endpoints.</summary>
-public sealed class CallEndpointsTests : IClassFixture<CallEndpointsWebAppFactory>
+public sealed class ApiEndpointsTests : IClassFixture<GvApiWebAppFactory>
 {
-    private readonly CallEndpointsWebAppFactory _factory;
+    private readonly GvApiWebAppFactory _factory;
 
-    /// <param name="factory">Shared application factory.</param>
-    public CallEndpointsTests(CallEndpointsWebAppFactory factory)
-    {
-        _factory = factory;
-    }
+    public ApiEndpointsTests(GvApiWebAppFactory factory) => _factory = factory;
 
-    /// <summary>GET /api/v1/calls returns 200 OK with an empty paged result.</summary>
     [Fact]
-    public async Task GetCallsReturnsOkWithEmptyPagedResult()
+    public async Task GetAccount_ReturnsOk()
     {
-        using var client = _factory.CreateClient();
+        var account = new GvAccount(
+            [new GvPhoneNumber("+15551234567", PhoneNumberType.GoogleVoice, true)],
+            [], new GvSettings(false, null));
+        _factory.Client.Account.GetAsync(Arg.Any<CancellationToken>()).Returns(account);
 
-        // xUnit1030: use ConfigureAwait(true) to satisfy both CA2007 and xUnit1030.
-        var response = await client.GetAsync(
-            new Uri("/api/v1/calls", UriKind.Relative)).ConfigureAwait(true);
+        using var client = _factory.CreateClient();
+        var response = await client.GetAsync(new Uri("/api/v1/account", UriKind.Relative));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var result = await response.Content
-            .ReadFromJsonAsync<PagedResult<CallRecord>>()
-            .ConfigureAwait(true);
-
-        result.Should().NotBeNull();
-        result!.Items.Should().BeEmpty();
-        result.Total.Should().Be(0);
-        result.NextCursor.Should().BeNull();
     }
 
-    /// <summary>POST /api/v1/calls with a valid body returns 201 Created.</summary>
     [Fact]
-    public async Task InitiateCallWithValidRequestReturnsCreated()
+    public async Task GetAccount_WhenAuthFails_Returns401()
     {
+        _factory.Client.Account.GetAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new GvAuthException("Unauthorized"));
+
         using var client = _factory.CreateClient();
+        var response = await client.GetAsync(new Uri("/api/v1/account", UriKind.Relative));
 
-        var gvCallId = Guid.NewGuid().ToString("N");
-        _factory.CallService
-            .InitiateCallAsync(
-                Arg.Any<string>(),
-                Arg.Any<string>(),
-                Arg.Any<CancellationToken>())
-            .Returns(GvCallResult.Ok(gvCallId));
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 
-        var request = new InitiateCallRequest("+15550000001", "+15550000002");
+    [Fact]
+    public async Task ListThreads_ReturnsOk()
+    {
+        _factory.Client.Threads.ListAsync(Arg.Any<GvThreadListOptions>(), Arg.Any<CancellationToken>())
+            .Returns(new GvThreadPage([], null, 0));
 
+        using var client = _factory.CreateClient();
+        var response = await client.GetAsync(new Uri("/api/v1/threads", UriKind.Relative));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task SendSms_WithValidRequest_ReturnsCreated()
+    {
+        _factory.Client.Sms.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GvSmsResult("t.+15551234567", true));
+
+        using var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync(
-            new Uri("/api/v1/calls", UriKind.Relative), request).ConfigureAwait(true);
+            new Uri("/api/v1/sms", UriKind.Relative),
+            new { ToNumber = "+15551234567", Message = "Hello!" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        response.Headers.Location.Should().NotBeNull();
     }
 
-    /// <summary>POST /api/v1/calls with an empty ToNumber returns 400 Bad Request.</summary>
     [Fact]
-    public async Task InitiateCallWithEmptyToNumberReturnsBadRequest()
+    public async Task SendSms_WithEmptyNumber_ReturnsBadRequest()
     {
         using var client = _factory.CreateClient();
-        var request = new InitiateCallRequest("+15550000001", string.Empty);
-
         var response = await client.PostAsJsonAsync(
-            new Uri("/api/v1/calls", UriKind.Relative), request).ConfigureAwait(true);
+            new Uri("/api/v1/sms", UriKind.Relative),
+            new { ToNumber = "", Message = "Hello!" });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>GET /api/v1/calls/{id} for an unknown ID returns 404 Not Found.</summary>
     [Fact]
-    public async Task GetCallWithUnknownIdReturnsNotFound()
+    public async Task InitiateCall_ReturnsCreated()
     {
+        _factory.Client.Calls.InitiateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GvCallResult.Ok("call-123"));
+
         using var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/v1/calls", UriKind.Relative),
+            new { ToNumber = "+15551234567" });
 
-        var response = await client.GetAsync(
-            new Uri($"/api/v1/calls/{Guid.NewGuid()}", UriKind.Relative))
-            .ConfigureAwait(true);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    [Fact]
+    public async Task InitiateCall_WhenRateLimited_Returns429()
+    {
+        _factory.Client.Calls.InitiateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new GvRateLimitException("calls/initiate"));
+
+        using var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            new Uri("/api/v1/calls", UriKind.Relative),
+            new { ToNumber = "+15551234567" });
+
+        response.StatusCode.Should().Be((HttpStatusCode)429);
     }
 }

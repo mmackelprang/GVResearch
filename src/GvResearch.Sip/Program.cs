@@ -1,9 +1,6 @@
 using System.Globalization;
 using System.Net;
-using GvResearch.Shared.Authentication;
-using GvResearch.Shared.Http;
-using GvResearch.Shared.RateLimiting;
-using GvResearch.Shared.Services;
+using GvResearch.Shared;
 using GvResearch.Sip.Calls;
 using GvResearch.Sip.Configuration;
 using GvResearch.Sip.Media;
@@ -49,32 +46,15 @@ try
             // ── Media ─────────────────────────────────────────────────────────
             services.AddSingleton<IGvAudioChannel, WebRtcGvAudioChannel>();
 
-            // ── Rate limiter ──────────────────────────────────────────────────
-            services.AddSingleton<GvRateLimiter>();
-
-            // ── Token service ─────────────────────────────────────────────────
-            services.AddSingleton<IGvTokenService>(sp =>
+            // ── GV SDK ───────────────────────────────────────────────────────
+            services.AddGvClient(options =>
             {
-                var tokenPath = cfg["GvResearch:TokenPath"] ?? string.Empty;
+                var tokenPath = cfg["GvResearch:CookiePath"] ?? string.Empty;
                 var keyPath = cfg["GvResearch:KeyPath"] ?? string.Empty;
-                return new EncryptedFileTokenService(
-                    string.IsNullOrWhiteSpace(tokenPath) ? "token.enc" : tokenPath,
-                    string.IsNullOrWhiteSpace(keyPath) ? "key.bin" : keyPath);
+                options.CookiePath = string.IsNullOrWhiteSpace(tokenPath) ? "cookies.enc" : tokenPath;
+                options.KeyPath = string.IsNullOrWhiteSpace(keyPath) ? "key.bin" : keyPath;
+                options.ApiKey = cfg["GvResearch:ApiKey"] ?? string.Empty;
             });
-
-            // ── HTTP client with resilience ────────────────────────────────────
-            services.AddTransient<GvHttpClientHandler>(sp =>
-            {
-                var tokenService = sp.GetRequiredService<IGvTokenService>();
-                return new GvHttpClientHandler(tokenService, new HttpClientHandler());
-            });
-
-            services
-                .AddHttpClient<IGvCallService, GvCallService>((_, client) =>
-                {
-                    client.BaseAddress = new Uri("https://voice.google.com");
-                })
-                .AddStandardResilienceHandler();
 
             // ── Call controller ───────────────────────────────────────────────
             services.AddSingleton<SipCallController>();

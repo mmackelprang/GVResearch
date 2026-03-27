@@ -29,23 +29,23 @@ public sealed class SipCallController : IDisposable
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(5, "HangupNotFound"),
             "Hangup requested for unknown call {CallId}.");
 
-    private readonly IGvCallService _callService;
+    private readonly IGvCallClient _callClient;
     private readonly ILogger<SipCallController> _logger;
     private readonly ConcurrentDictionary<string, CallSession> _activeCalls =
         new(StringComparer.Ordinal);
 
     private bool _disposed;
 
-    /// <param name="callService">GV call service for initiating and hanging up back-end calls.</param>
+    /// <param name="callClient">GV call client for initiating and hanging up back-end calls.</param>
     /// <param name="logger">Logger.</param>
     public SipCallController(
-        IGvCallService callService,
+        IGvCallClient callClient,
         ILogger<SipCallController> logger)
     {
-        ArgumentNullException.ThrowIfNull(callService);
+        ArgumentNullException.ThrowIfNull(callClient);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _callService = callService;
+        _callClient = callClient;
         _logger = logger;
     }
 
@@ -53,7 +53,6 @@ public sealed class SipCallController : IDisposable
     /// Creates a new outbound GV call for the given SIP INVITE.
     /// </summary>
     /// <param name="sipCallId">The SIP Call-ID header value.</param>
-    /// <param name="fromNumber">The GV number to dial from.</param>
     /// <param name="destinationNumber">The number to call.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
@@ -62,13 +61,11 @@ public sealed class SipCallController : IDisposable
     /// </returns>
     public async Task<CallSession?> CreateOutboundCallAsync(
         string sipCallId,
-        string fromNumber,
         string destinationNumber,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(sipCallId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(fromNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationNumber);
 
         LogCallCreating(_logger, sipCallId, destinationNumber, null);
@@ -76,8 +73,8 @@ public sealed class SipCallController : IDisposable
         var session = new CallSession(sipCallId, destinationNumber);
         _activeCalls[sipCallId] = session;
 
-        var result = await _callService
-            .InitiateCallAsync(fromNumber, destinationNumber, cancellationToken)
+        var result = await _callClient
+            .InitiateAsync(destinationNumber, cancellationToken)
             .ConfigureAwait(false);
 
         if (!result.Success)
@@ -88,9 +85,9 @@ public sealed class SipCallController : IDisposable
             return null;
         }
 
-        session.GvCallId = result.GvCallId;
+        session.GvCallId = result.CallId;
         session.TransitionTo(CallState.Ringing);
-        LogCallCreated(_logger, result.GvCallId, null);
+        LogCallCreated(_logger, result.CallId, null);
         return session;
     }
 
@@ -115,7 +112,7 @@ public sealed class SipCallController : IDisposable
 
         if (session.GvCallId is not null)
         {
-            await _callService.HangupAsync(session.GvCallId, cancellationToken).ConfigureAwait(false);
+            await _callClient.HangupAsync(session.GvCallId, cancellationToken).ConfigureAwait(false);
         }
 
         session.Dispose();
