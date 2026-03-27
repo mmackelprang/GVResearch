@@ -4,61 +4,47 @@ using GvResearch.Shared;
 using Microsoft.AspNetCore.Authentication;
 using Serilog;
 
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
-    .CreateBootstrapLogger();
+var builder = WebApplication.CreateBuilder(args);
 
-try
+builder.Host.UseSerilog((ctx, lc) =>
+    lc.ReadFrom.Configuration(ctx.Configuration)
+      .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture));
+
+builder.Services
+    .AddAuthentication("Bearer")
+    .AddScheme<AuthenticationSchemeOptions, GvResearch.Api.Auth.BearerSchemeHandler>(
+        "Bearer", _ => { });
+builder.Services.AddAuthorization();
+
+builder.Services.AddEndpointsApiExplorer();
+
+var cfg = builder.Configuration;
+builder.Services.AddGvClient(options =>
 {
-    var builder = WebApplication.CreateBuilder(args);
+    options.CookiePath = cfg["GvResearch:CookiePath"] ?? "cookies.enc";
+    options.KeyPath = cfg["GvResearch:KeyPath"] ?? "key.bin";
+});
 
-    builder.Host.UseSerilog((ctx, lc) =>
-        lc.ReadFrom.Configuration(ctx.Configuration));
-
-    builder.Services
-        .AddAuthentication("Bearer")
-        .AddScheme<AuthenticationSchemeOptions, GvResearch.Api.Auth.BearerSchemeHandler>(
-            "Bearer", _ => { });
-    builder.Services.AddAuthorization();
-
-    builder.Services.AddEndpointsApiExplorer();
-
-    var cfg = builder.Configuration;
-    builder.Services.AddGvClient(options =>
-    {
-        options.CookiePath = cfg["GvResearch:CookiePath"] ?? "cookies.enc";
-        options.KeyPath = cfg["GvResearch:KeyPath"] ?? "key.bin";
-    });
-
-    builder.Services.ConfigureHttpJsonOptions(opts =>
-    {
-        opts.SerializerOptions.PropertyNamingPolicy =
-            System.Text.Json.JsonNamingPolicy.CamelCase;
-        opts.SerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter());
-    });
-
-    var app = builder.Build();
-
-    app.UseSerilogRequestLogging();
-    app.UseAuthentication();
-    app.UseAuthorization();
-
-    app.MapAccountEndpoints();
-    app.MapThreadEndpoints();
-    app.MapSmsEndpoints();
-    app.MapCallEndpoints();
-
-    app.Run();
-}
-catch (Exception ex) when (ex is not OperationCanceledException)
+builder.Services.ConfigureHttpJsonOptions(opts =>
 {
-    Log.Fatal(ex, "Host terminated unexpectedly.");
-}
-finally
-{
-    Log.CloseAndFlush();
-}
+    opts.SerializerOptions.PropertyNamingPolicy =
+        System.Text.Json.JsonNamingPolicy.CamelCase;
+    opts.SerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
+
+var app = builder.Build();
+
+app.UseSerilogRequestLogging();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapAccountEndpoints();
+app.MapThreadEndpoints();
+app.MapSmsEndpoints();
+app.MapCallEndpoints();
+
+app.Run();
 
 #pragma warning disable CA1050
 public partial class Program { }

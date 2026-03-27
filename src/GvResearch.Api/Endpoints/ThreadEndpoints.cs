@@ -1,6 +1,7 @@
 using GvResearch.Shared.Exceptions;
 using GvResearch.Shared.Models;
 using GvResearch.Shared.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GvResearch.Api.Endpoints;
 
@@ -128,7 +129,7 @@ public static class ThreadEndpoints
         .WithName("MarkAllRead")
         .WithSummary("Mark all threads as read.");
 
-        group.MapDelete("/", async (ThreadIdsRequest request, IGvClient client, CancellationToken ct) =>
+        group.MapDelete("/", async ([FromBody] ThreadIdsRequest request, IGvClient client, CancellationToken ct) =>
         {
             try
             {
