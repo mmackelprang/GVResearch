@@ -18,8 +18,9 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 - GV uses **cookie-based auth** (SAPISID, SID, HSID, SSID, APISID), NOT OAuth2 bearer tokens
 - Authorization header: `SAPISIDHASH <timestamp>_<sha1(timestamp + " " + SAPISID + " " + origin)>`
 - **Auth strategy:** One-time Playwright login (human types creds ~10s) → cookies encrypted to disk → reused headless for weeks/months → health check + refresh on each invocation → re-login only when refresh fails
-- The existing `GvHttpClientHandler.cs` injects tokens but needs updating to use SAPISIDHASH format
-- See `docs/api-research/headless-integration-guide.md` for the full `GvAuthService` implementation pattern with `LoginInteractiveAsync()`, `GetValidCookiesAsync()`, and `TryRefreshSessionAsync()`
+- `GvHttpClientHandler.cs` injects SAPISIDHASH + full cookie set on every outgoing request
+- `GvAuthService` implements `GetValidCookiesAsync()` and `ComputeSapisidHash()` — `LoginInteractiveAsync()` and `TryRefreshSessionAsync()` are deferred
+- See `docs/api-research/headless-integration-guide.md` for the full auth flow including health check and refresh
 
 ### API Protocol
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`
@@ -27,21 +28,22 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 - **API Key:** `{GV_API_KEY}` (public, scoped to Voice)
 - Responses are **nested arrays, not objects** — field position is determined by .proto schema
 
-### Existing Code Status
-- `GvCallService.cs` has placeholder endpoints (`/voice/api/calls/*`) that are **WRONG** — the real endpoints are `api2thread/list`, `api2thread/sendsms`, etc. as documented in the API reference
-- `GvHttpClientHandler.cs` injects token as GAPS cookie — needs updating to SAPISIDHASH
-- Rate limiting (`GvRateLimiter.cs`) is correct and ready to use
-- Auth encryption (`TokenEncryption.cs`, `EncryptedFileTokenService.cs`) is ready
+### SDK Architecture (IGvClient)
+- **`IGvClient`** is the single entry point — all consumers use it via DI (`services.AddGvClient()`)
+- Sub-clients: `IGvAccountClient`, `IGvThreadClient`, `IGvSmsClient`, `IGvCallClient`
+- **`GvHttpClientHandler`** injects SAPISIDHASH authorization + cookie headers on every request
+- **`GvAuthService`** loads encrypted cookies from disk, caches in memory, computes SAPISIDHASH
+- **`GvProtobufJsonParser`** / **`GvRequestBuilder`** handle protobuf-JSON ↔ C# model translation
+- **`ICallTransport`** abstracts voice calls — SIP first, WebRTC/Callback pluggable later
+- Rate limiting (`GvRateLimiter.cs`) enforced per-endpoint in every sub-client
+- Auth encryption (`TokenEncryption.cs`) encrypts/decrypts the full cookie set (AES-256)
 
-### What Needs to Be Built
-1. **Update `GvHttpClientHandler`** — Switch from GAPS cookie to SAPISIDHASH authorization header
-2. **Replace placeholder endpoints** in `GvCallService` with real ones from the API reference
-3. **Build protobuf-JSON parser** — Positional array access for GV responses (see headless guide)
-4. **Build `GvThreadService`** — Thread CRUD (list, get, delete, archive, spam, search)
-5. **Build `GvSmsService`** — Send/receive SMS via `api2thread/sendsms` + signaler polling
-6. **Build `GvVoicemailService`** — List, play (HTTP GET on signed URL), delete, transcription access
-7. **Build `GvSignalerClient`** — Long-poll push channel for real-time notifications
-8. **Optionally: SIP integration** — Use `sipregisterinfo/get` tokens with a SIP library for VoIP
+### What Still Needs to Be Built
+1. **`SipCallTransport`** — `ICallTransport` implementation using SIPSorcery + `sipregisterinfo/get`
+2. **`LoginInteractiveAsync()`** — Playwright-based one-time browser login to populate cookies
+3. **`TryRefreshSessionAsync()`** — Health check via `threadinginfo/get` + cookie refresh cascade
+4. **`GvSignalerClient`** — Long-poll push channel for real-time notifications
+5. **Voicemail service** — List, play (signed URL), delete, transcription access
 
 ## Coding Conventions
 
@@ -56,11 +58,21 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 
 ```
 src/
-  GvResearch.Api/          — ASP.NET REST facade (exposes clean REST over GV's internal API)
-  GvResearch.Shared/       — Core logic: auth, HTTP client, services, models
-  GvResearch.Client.Cli/   — CLI tool for headless GV operations
-  GvResearch.Sip/          — SIP/VoIP integration (future)
-  GvResearch.Softphone/    — Softphone UI (future)
+  GvResearch.Api/          — ASP.NET REST facade (thin host over IGvClient)
+    Endpoints/             — AccountEndpoints, ThreadEndpoints, SmsEndpoints, CallEndpoints
+    Auth/                  — BearerSchemeHandler (placeholder, Phase 2)
+  GvResearch.Shared/       — Core SDK: IGvClient, auth, protocol, services, models
+    Auth/                  — IGvAuthService, GvAuthService, GvCookieSet, TokenEncryption
+    Exceptions/            — GvApiException, GvAuthException, GvRateLimitException
+    Http/                  — GvHttpClientHandler (SAPISIDHASH injection)
+    Models/                — Domain records (GvAccount, GvThread, GvMessage, etc.)
+    Protocol/              — GvProtobufJsonParser, GvRequestBuilder
+    RateLimiting/          — GvRateLimiter (per-endpoint dual-window)
+    Services/              — IGvClient, GvClient, sub-client implementations
+    Transport/             — ICallTransport, TransportCallResult, TransportCallStatus
+  GvResearch.Client.Cli/   — CLI tool for headless GV operations (future)
+  GvResearch.Sip/          — SIP gateway (uses IGvClient via AddGvClient())
+  GvResearch.Softphone/    — Softphone UI (Avalonia, future)
 docs/
   api-research/            — API reference and integration guides (READ FIRST)
   superpowers/plans/       — Implementation plans
