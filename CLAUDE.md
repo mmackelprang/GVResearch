@@ -24,7 +24,7 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 ### API Protocol
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`
 - **Format:** Protobuf serialized as JSON arrays (`application/json+protobuf` with `alt=protojson`)
-- **API Key:** `AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg` (public, scoped to Voice)
+- **API Key:** `{GV_API_KEY}` (public, scoped to Voice)
 - Responses are **nested arrays, not objects** — field position is determined by .proto schema
 
 ### Existing Code Status

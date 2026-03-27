@@ -12,7 +12,8 @@ All Voice Client API endpoints use:
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`
 - **Method:** POST
 - **Content-Type:** `application/json+protobuf` (protobuf serialized as JSON arrays)
-- **Query Params:** `alt=protojson&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg`
+- **Query Params:** `alt=protojson&key={GV_API_KEY}`
+- **Note:** `{GV_API_KEY}` is Google Voice's public browser-embedded API key. It is visible in the GV web app's JavaScript source to any authenticated user. Store it in configuration (e.g., `appsettings.json` or environment variable `GV_API_KEY`), not in source.
 - **Auth:** Cookie-based (GAPS token, SAPISID hash) — injected by browser session
 
 gRPC-Web services use:

@@ -61,7 +61,7 @@ public static string BuildSapisidHash(string sapisid, string origin = "https://v
 ### Required Request Headers
 
 ```http
-POST /voice/v1/voiceclient/api2thread/list?alt=protojson&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg HTTP/1.1
+POST /voice/v1/voiceclient/api2thread/list?alt=protojson&key={GV_API_KEY} HTTP/1.1
 Host: clients6.google.com
 Content-Type: application/json+protobuf
 Authorization: SAPISIDHASH <timestamp>_<sha1hash>
@@ -253,7 +253,7 @@ For truly zero-browser auth, the Google Voice Android app uses a different auth 
 public class GvVoiceClient
 {
     private readonly HttpClient _http;
-    private readonly string _apiKey = "AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg";
+    private readonly string _apiKey = "{GV_API_KEY}";
     private readonly string _baseUrl = "https://clients6.google.com/voice/v1/voiceclient";
 
     public async Task<string> CallEndpointAsync(string endpoint, string protojsonBody)
