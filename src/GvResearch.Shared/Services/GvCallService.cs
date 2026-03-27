@@ -122,7 +122,7 @@ public sealed class GvCallService : IGvCallService
         if (!await _rateLimiter.TryAcquireAsync(StatusRateLimitKey, cancellationToken).ConfigureAwait(false))
         {
             LogRateLimitExceededStatus(_logger, null);
-            return new GvCallStatus(gvCallId, GvCallStatusType.Unknown, DateTimeOffset.UtcNow);
+            return new GvCallStatus(gvCallId, CallStatusType.Unknown, DateTimeOffset.UtcNow);
         }
 
         try
@@ -133,16 +133,16 @@ public sealed class GvCallService : IGvCallService
 
             if (!response.IsSuccessStatusCode)
             {
-                return new GvCallStatus(gvCallId, GvCallStatusType.Unknown, DateTimeOffset.UtcNow);
+                return new GvCallStatus(gvCallId, CallStatusType.Unknown, DateTimeOffset.UtcNow);
             }
 
             // TODO (Phase 1): Parse actual status from GV response JSON.
-            return new GvCallStatus(gvCallId, GvCallStatusType.Active, DateTimeOffset.UtcNow);
+            return new GvCallStatus(gvCallId, CallStatusType.Active, DateTimeOffset.UtcNow);
         }
         catch (HttpRequestException ex)
         {
             LogStatusException(_logger, ex);
-            return new GvCallStatus(gvCallId, GvCallStatusType.Unknown, DateTimeOffset.UtcNow);
+            return new GvCallStatus(gvCallId, CallStatusType.Unknown, DateTimeOffset.UtcNow);
         }
     }
 

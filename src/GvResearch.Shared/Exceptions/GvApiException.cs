@@ -4,6 +4,21 @@ public class GvApiException : Exception
 {
     public int? StatusCode { get; }
 
+    public GvApiException()
+        : base()
+    {
+    }
+
+    public GvApiException(string message)
+        : base(message)
+    {
+    }
+
+    public GvApiException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
     public GvApiException(string message, int? statusCode = null)
         : base(message)
     {
