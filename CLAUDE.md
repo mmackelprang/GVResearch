@@ -17,8 +17,9 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 ### Authentication
 - GV uses **cookie-based auth** (SAPISID, SID, HSID, SSID, APISID), NOT OAuth2 bearer tokens
 - Authorization header: `SAPISIDHASH <timestamp>_<sha1(timestamp + " " + SAPISID + " " + origin)>`
-- Tokens extracted from browser session, encrypted at rest via `TokenEncryption.cs`
+- **Auth strategy:** One-time Playwright login (human types creds ~10s) → cookies encrypted to disk → reused headless for weeks/months → health check + refresh on each invocation → re-login only when refresh fails
 - The existing `GvHttpClientHandler.cs` injects tokens but needs updating to use SAPISIDHASH format
+- See `docs/api-research/headless-integration-guide.md` for the full `GvAuthService` implementation pattern with `LoginInteractiveAsync()`, `GetValidCookiesAsync()`, and `TryRefreshSessionAsync()`
 
 ### API Protocol
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`

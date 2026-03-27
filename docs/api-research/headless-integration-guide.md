@@ -6,43 +6,243 @@ How to use the discovered GV API without any browser.
 
 ## Authentication
 
-GV uses Google's cookie-based auth, not OAuth2 bearer tokens. To make API calls headless, you need:
+GV uses Google's cookie-based auth, not OAuth2 bearer tokens. A browser is needed **once** to sign in; after that, the entire API can be driven headless for weeks or months.
 
-### Required Cookies/Headers
-1. **SAPISID** — Google API session cookie (long-lived, from browser session)
-2. **SAPISIDHASH** — HMAC of `timestamp_SAPISID_origin` used in `Authorization` header
-3. **SID, HSID, SSID, APISID** — Additional session cookies
+### Auth Architecture
 
-### How to Obtain Tokens
-**Option A: Extract from browser (recommended for research)**
-1. Log into `voice.google.com` in any browser
-2. Open DevTools → Application → Cookies
-3. Copy `SAPISID`, `SID`, `HSID`, `SSID`, `APISID`, `__Secure-1PSID`, `__Secure-3PSID`
-4. Store encrypted via `TokenEncryption.cs`
-
-**Option B: Programmatic login via Playwright (one-time)**
-1. Use Playwright to navigate to Google login
-2. Human enters credentials once
-3. Extract cookies from browser context
-4. Save to encrypted token store
-5. Reuse until expired (tokens last weeks/months)
-
-### Building the Authorization Header
 ```
-SAPISIDHASH <timestamp>_<sha1(timestamp + " " + SAPISID + " " + origin)>
+┌─────────────────────────────────────────────────────────────┐
+│                    Auth Flow Decision Tree                    │
+│                                                              │
+│  Start → Check encrypted cookie file on disk                 │
+│    │                                                         │
+│    ├─ Cookies exist + SAPISID present                        │
+│    │   └─ Try health check: POST threadinginfo/get           │
+│    │       ├─ 200 OK → USE COOKIES (fully headless)          │
+│    │       └─ 401/403 → Try cookie refresh                   │
+│    │           ├─ Refresh succeeds → USE NEW COOKIES          │
+│    │           └─ Refresh fails → BROWSER LOGIN NEEDED        │
+│    │                                                         │
+│    └─ No cookies on disk → BROWSER LOGIN NEEDED              │
+│                                                              │
+│  BROWSER LOGIN (rare — once per weeks/months):               │
+│    1. Launch Playwright → accounts.google.com                │
+│    2. Human types email + password + 2FA (~10 seconds)       │
+│    3. Extract all cookies from browser context               │
+│    4. Encrypt and save to disk                               │
+│    5. Close browser → fully headless from here               │
+└─────────────────────────────────────────────────────────────┘
 ```
-Where `origin` = `https://voice.google.com`
+
+### Required Cookies
+
+| Cookie | Domain | Lifetime | Purpose |
+|---|---|---|---|
+| **SAPISID** | `.google.com` | Months | Used to compute SAPISIDHASH authorization |
+| **SID** | `.google.com` | Months | Primary session identifier |
+| **HSID** | `.google.com` | Months | HTTP-only session ID |
+| **SSID** | `.google.com` | Months | Secure session ID |
+| **APISID** | `.google.com` | Months | API session ID |
+| `__Secure-1PSID` | `.google.com` | Months | Secure primary session (backup) |
+| `__Secure-3PSID` | `.google.com` | Months | Secure tertiary session (backup) |
+
+### Building the SAPISIDHASH Authorization Header
+
+```csharp
+public static string BuildSapisidHash(string sapisid, string origin = "https://voice.google.com")
+{
+    var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    var input = $"{timestamp} {sapisid} {origin}";
+    var hash = Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(input)));
+    return $"SAPISIDHASH {timestamp}_{hash}";
+}
+```
 
 ### Required Request Headers
+
 ```http
 POST /voice/v1/voiceclient/api2thread/list?alt=protojson&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg HTTP/1.1
 Host: clients6.google.com
 Content-Type: application/json+protobuf
-Authorization: SAPISIDHASH <hash>
+Authorization: SAPISIDHASH <timestamp>_<sha1hash>
 Cookie: SID=<sid>; HSID=<hsid>; SSID=<ssid>; APISID=<apisid>; SAPISID=<sapisid>
 Origin: https://voice.google.com
+Referer: https://voice.google.com/
 X-Goog-AuthUser: 0
 ```
+
+### Obtaining Cookies — Playwright One-Time Login
+
+```csharp
+public class GvAuthService
+{
+    private readonly string _cookiePath;  // encrypted cookie file
+
+    /// <summary>
+    /// Interactive login — launches browser, human enters credentials.
+    /// Call this only when headless auth fails.
+    /// </summary>
+    public async Task<GvCookieSet> LoginInteractiveAsync()
+    {
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new() { Headless = false });
+        var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+
+        await page.GotoAsync("https://accounts.google.com/ServiceLogin?continue=https://voice.google.com");
+
+        // Wait for human to complete login + 2FA
+        // Detect success by watching for voice.google.com URL
+        await page.WaitForURLAsync("**/voice.google.com/**", new() { Timeout = 120_000 });
+
+        // Extract all cookies
+        var cookies = await context.CookiesAsync();
+        var cookieSet = new GvCookieSet
+        {
+            Sapisid  = cookies.First(c => c.Name == "SAPISID").Value,
+            Sid      = cookies.First(c => c.Name == "SID").Value,
+            Hsid     = cookies.First(c => c.Name == "HSID").Value,
+            Ssid     = cookies.First(c => c.Name == "SSID").Value,
+            Apisid   = cookies.First(c => c.Name == "APISID").Value,
+            ExtraSecure = cookies.Where(c => c.Name.StartsWith("__Secure"))
+                                 .ToDictionary(c => c.Name, c => c.Value),
+            ObtainedAt = DateTimeOffset.UtcNow
+        };
+
+        // Encrypt and save
+        var json = JsonSerializer.Serialize(cookieSet);
+        var encrypted = TokenEncryption.Encrypt(json, _encryptionKey);
+        await File.WriteAllBytesAsync(_cookiePath, encrypted);
+
+        await browser.CloseAsync();
+        return cookieSet;
+    }
+
+    /// <summary>
+    /// Headless auth — loads cookies from disk, validates, refreshes if needed.
+    /// Returns null if browser login is required.
+    /// </summary>
+    public async Task<GvCookieSet?> GetValidCookiesAsync()
+    {
+        if (!File.Exists(_cookiePath))
+            return null;
+
+        var encrypted = await File.ReadAllBytesAsync(_cookiePath);
+        var json = TokenEncryption.Decrypt(encrypted, _encryptionKey);
+        var cookies = JsonSerializer.Deserialize<GvCookieSet>(json);
+
+        if (cookies?.Sapisid is null)
+            return null;
+
+        // Health check — try a lightweight API call
+        if (await IsSessionValidAsync(cookies))
+            return cookies;
+
+        // Try cookie refresh
+        var refreshed = await TryRefreshSessionAsync(cookies);
+        if (refreshed is not null)
+        {
+            // Save refreshed cookies
+            var newJson = JsonSerializer.Serialize(refreshed);
+            var newEncrypted = TokenEncryption.Encrypt(newJson, _encryptionKey);
+            await File.WriteAllBytesAsync(_cookiePath, newEncrypted);
+            return refreshed;
+        }
+
+        return null; // Browser login needed
+    }
+
+    private async Task<bool> IsSessionValidAsync(GvCookieSet cookies)
+    {
+        // threadinginfo/get is lightweight and tells us if auth works
+        try
+        {
+            var response = await CallGvApiAsync(cookies, "threadinginfo/get", "[]");
+            return response.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    private async Task<GvCookieSet?> TryRefreshSessionAsync(GvCookieSet cookies)
+    {
+        // Google's RotateCookies endpoint may extend the session
+        // This is undocumented and may not always work
+        try
+        {
+            using var http = new HttpClient();
+            var request = new HttpRequestMessage(HttpMethod.Post,
+                "https://accounts.google.com/RotateCookies");
+            request.Headers.Add("Cookie", cookies.ToCookieHeader());
+            var response = await http.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            // Extract refreshed cookies from Set-Cookie headers
+            // ... parse and return updated GvCookieSet
+            return null; // TODO: implement cookie parsing from response
+        }
+        catch { return null; }
+    }
+}
+```
+
+### CLI Auth Commands
+
+The recommended CLI flow:
+
+```bash
+# First time — opens browser for login (human interaction ~10 seconds)
+gvresearch auth login
+
+# Check if cookies are still valid (headless)
+gvresearch auth status
+# Output: "Session valid. SAPISID expires in ~47 days. Last validated: 2 minutes ago."
+
+# Force refresh without browser (may fail if session too old)
+gvresearch auth refresh
+
+# All other commands work headless using stored cookies
+gvresearch sms send --to "+19193718044" --text "Hello from CLI"
+gvresearch calls list --limit 20
+gvresearch voicemail list
+gvresearch thread search "appointment"
+```
+
+### Cookie Lifetime and Refresh Strategy
+
+| Cookie | Typical Lifetime | Refresh Method |
+|---|---|---|
+| SAPISID | 2+ months | Cannot refresh — lasts until Google invalidates |
+| SID/HSID | 2+ months | `RotateCookies` may extend |
+| SSID | 2+ months | Rotated with SID |
+| APISID | 2+ months | Rotated with SID |
+
+**Recommended refresh strategy:**
+1. **On every CLI invocation:** Check `ObtainedAt` age. If < 24 hours, skip validation.
+2. **If > 24 hours since last validation:** Run `threadinginfo/get` health check.
+3. **If health check fails:** Try `RotateCookies`.
+4. **If refresh fails:** Print `"Session expired. Run 'gvresearch auth login' to re-authenticate."` and exit.
+5. **Never auto-launch a browser** — always require explicit `auth login` command.
+
+### Alternative: Android App Token Path (experimental, fully browserless)
+
+For truly zero-browser auth, the Google Voice Android app uses a different auth mechanism:
+
+1. Install Google Voice APK in an Android emulator
+2. Sign in via Google Play Services (one-time emulator interaction)
+3. Extract the OAuth2 refresh token from the app's token store:
+   ```bash
+   adb shell "su -c 'cat /data/data/com.google.android.apps.googlevoice/shared_prefs/oauth2_tokens.xml'"
+   ```
+4. Use the refresh token to get access tokens programmatically:
+   ```
+   POST https://oauth2.googleapis.com/token
+   grant_type=refresh_token&refresh_token=<token>&client_id=<gv_android_client_id>
+   ```
+5. Use the access token with GV's mobile API endpoints (may differ from web endpoints)
+
+**Status:** Unverified. The mobile API surface has not been investigated. Web API endpoints documented here may or may not accept OAuth2 bearer tokens.
 
 ---
 
