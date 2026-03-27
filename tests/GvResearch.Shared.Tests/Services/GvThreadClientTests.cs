@@ -9,6 +9,7 @@ namespace GvResearch.Shared.Tests.Services;
 
 public sealed class GvThreadClientTests : IDisposable
 {
+    private static readonly GvApiConfig TestApiConfig = new() { ApiKey = "test-key" };
     private readonly GvRateLimiter _rateLimiter = new(perMinuteLimit: 100, perDayLimit: 1000);
 
     [Fact]
@@ -16,7 +17,7 @@ public sealed class GvThreadClientTests : IDisposable
     {
         var json = """[[["t.+15551234567",1,[["msg1",1000,"+1",["+2"],10,1,null,null,null,null,null,"Hi",null,null,0,1]]]]]""";
         using var httpClient = CreateHttpClient(HttpStatusCode.OK, json);
-        var sut = new GvThreadClient(httpClient, _rateLimiter);
+        var sut = new GvThreadClient(httpClient, _rateLimiter, TestApiConfig);
 
         var page = await sut.ListAsync();
 
@@ -29,7 +30,7 @@ public sealed class GvThreadClientTests : IDisposable
     {
         var json = """["t.+15551234567",0,[["msg1",1000,"+1",["+2"],10,0,null,null,null,null,null,"Hello",null,null,0,0]]]""";
         using var httpClient = CreateHttpClient(HttpStatusCode.OK, json);
-        var sut = new GvThreadClient(httpClient, _rateLimiter);
+        var sut = new GvThreadClient(httpClient, _rateLimiter, TestApiConfig);
 
         var thread = await sut.GetAsync("t.+15551234567");
 
@@ -41,7 +42,7 @@ public sealed class GvThreadClientTests : IDisposable
     public async Task DeleteAsync_WhenUnauthorized_ThrowsAuthException()
     {
         using var httpClient = CreateHttpClient(HttpStatusCode.Forbidden, "");
-        var sut = new GvThreadClient(httpClient, _rateLimiter);
+        var sut = new GvThreadClient(httpClient, _rateLimiter, TestApiConfig);
 
         var act = () => sut.DeleteAsync(["t.+1111"]);
 
@@ -53,7 +54,7 @@ public sealed class GvThreadClientTests : IDisposable
     {
         var json = """[[[[1,null,5],[4,null,2],[3,null,10],[5,null,0],[6,null,1]]]]""";
         using var httpClient = CreateHttpClient(HttpStatusCode.OK, json);
-        var sut = new GvThreadClient(httpClient, _rateLimiter);
+        var sut = new GvThreadClient(httpClient, _rateLimiter, TestApiConfig);
 
         var counts = await sut.GetUnreadCountsAsync();
 

@@ -23,6 +23,7 @@ builder.Services.AddGvClient(options =>
 {
     options.CookiePath = cfg["GvResearch:CookiePath"] ?? "cookies.enc";
     options.KeyPath = cfg["GvResearch:KeyPath"] ?? "key.bin";
+    options.ApiKey = cfg["GvResearch:ApiKey"] ?? string.Empty;
 });
 
 builder.Services.ConfigureHttpJsonOptions(opts =>

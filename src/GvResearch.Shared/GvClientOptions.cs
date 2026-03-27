@@ -6,5 +6,6 @@ public sealed class GvClientOptions
 {
     public string CookiePath { get; set; } = "cookies.enc";
     public string KeyPath { get; set; } = "key.bin";
+    public string ApiKey { get; set; } = string.Empty;
     public CallTransportType CallTransport { get; set; } = CallTransportType.Sip;
 }

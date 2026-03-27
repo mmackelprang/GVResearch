@@ -12,11 +12,13 @@ public sealed class GvAccountClient : IGvAccountClient
     private const string Endpoint = "account/get";
     private readonly HttpClient _httpClient;
     private readonly GvRateLimiter _rateLimiter;
+    private readonly GvApiConfig _apiConfig;
 
-    public GvAccountClient(HttpClient httpClient, GvRateLimiter rateLimiter)
+    public GvAccountClient(HttpClient httpClient, GvRateLimiter rateLimiter, GvApiConfig apiConfig)
     {
         _httpClient = httpClient;
         _rateLimiter = rateLimiter;
+        _apiConfig = apiConfig;
     }
 
     public async Task<GvAccount> GetAsync(CancellationToken ct = default)
@@ -27,7 +29,7 @@ public sealed class GvAccountClient : IGvAccountClient
         var body = GvRequestBuilder.BuildAccountGetRequest();
         using var content = new StringContent(body, Encoding.UTF8, "application/json+protobuf");
         var response = await _httpClient
-            .PostAsync(new Uri($"voice/v1/voiceclient/{Endpoint}?alt=protojson", UriKind.Relative), content, ct)
+            .PostAsync(new Uri($"voice/v1/voiceclient/{Endpoint}?{_apiConfig.QueryString}", UriKind.Relative), content, ct)
             .ConfigureAwait(false);
 
         if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
@@ -37,7 +39,7 @@ public sealed class GvAccountClient : IGvAccountClient
             throw new GvApiException($"Account get failed: HTTP {(int)response.StatusCode}", (int)response.StatusCode);
 
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        var root = JsonDocument.Parse(json).RootElement;
-        return GvProtobufJsonParser.ParseAccount(root);
+        using var doc = JsonDocument.Parse(json);
+        return GvProtobufJsonParser.ParseAccount(doc.RootElement);
     }
 }

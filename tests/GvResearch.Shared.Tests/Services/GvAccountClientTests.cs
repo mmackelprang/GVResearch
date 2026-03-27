@@ -8,6 +8,7 @@ namespace GvResearch.Shared.Tests.Services;
 
 public sealed class GvAccountClientTests : IDisposable
 {
+    private static readonly GvApiConfig TestApiConfig = new() { ApiKey = "test-key" };
     private readonly GvRateLimiter _rateLimiter = new(perMinuteLimit: 100, perDayLimit: 1000);
 
     [Fact]
@@ -15,7 +16,7 @@ public sealed class GvAccountClientTests : IDisposable
     {
         var responseJson = """["+19196706660",null,[],null,null,[]]""";
         using var httpClient = CreateHttpClient(HttpStatusCode.OK, responseJson);
-        var sut = new GvAccountClient(httpClient, _rateLimiter);
+        var sut = new GvAccountClient(httpClient, _rateLimiter, TestApiConfig);
 
         var account = await sut.GetAsync();
 
@@ -29,7 +30,7 @@ public sealed class GvAccountClientTests : IDisposable
         using var limiter = new GvRateLimiter(perMinuteLimit: 1, perDayLimit: 100);
         await limiter.TryAcquireAsync("account/get");
         using var httpClient = CreateHttpClient(HttpStatusCode.OK, "[]");
-        var sut = new GvAccountClient(httpClient, limiter);
+        var sut = new GvAccountClient(httpClient, limiter, TestApiConfig);
 
         var act = () => sut.GetAsync();
 
@@ -40,7 +41,7 @@ public sealed class GvAccountClientTests : IDisposable
     public async Task GetAsync_WhenUnauthorized_ThrowsAuthException()
     {
         using var httpClient = CreateHttpClient(HttpStatusCode.Unauthorized, "");
-        var sut = new GvAccountClient(httpClient, _rateLimiter);
+        var sut = new GvAccountClient(httpClient, _rateLimiter, TestApiConfig);
 
         var act = () => sut.GetAsync();
 

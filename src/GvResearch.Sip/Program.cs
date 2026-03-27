@@ -53,6 +53,7 @@ try
                 var keyPath = cfg["GvResearch:KeyPath"] ?? string.Empty;
                 options.CookiePath = string.IsNullOrWhiteSpace(tokenPath) ? "cookies.enc" : tokenPath;
                 options.KeyPath = string.IsNullOrWhiteSpace(keyPath) ? "key.bin" : keyPath;
+                options.ApiKey = cfg["GvResearch:ApiKey"] ?? string.Empty;
             });
 
             // ── Call controller ───────────────────────────────────────────────

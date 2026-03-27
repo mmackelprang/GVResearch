@@ -11,11 +11,13 @@ public sealed class GvThreadClient : IGvThreadClient
 {
     private readonly HttpClient _httpClient;
     private readonly GvRateLimiter _rateLimiter;
+    private readonly GvApiConfig _apiConfig;
 
-    public GvThreadClient(HttpClient httpClient, GvRateLimiter rateLimiter)
+    public GvThreadClient(HttpClient httpClient, GvRateLimiter rateLimiter, GvApiConfig apiConfig)
     {
         _httpClient = httpClient;
         _rateLimiter = rateLimiter;
+        _apiConfig = apiConfig;
     }
 
     public Task<GvThreadPage> ListAsync(GvThreadListOptions? options = null, CancellationToken ct = default) =>
@@ -62,7 +64,7 @@ public sealed class GvThreadClient : IGvThreadClient
 
         using var content = new StringContent(body, Encoding.UTF8, "application/json+protobuf");
         var response = await _httpClient
-            .PostAsync(new Uri($"voice/v1/voiceclient/{endpoint}?alt=protojson", UriKind.Relative), content, ct)
+            .PostAsync(new Uri($"voice/v1/voiceclient/{endpoint}?{_apiConfig.QueryString}", UriKind.Relative), content, ct)
             .ConfigureAwait(false);
 
         ThrowOnAuthError(response, endpoint);
@@ -70,7 +72,8 @@ public sealed class GvThreadClient : IGvThreadClient
             throw new GvApiException($"{endpoint} failed: HTTP {(int)response.StatusCode}", (int)response.StatusCode);
 
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return parser(JsonDocument.Parse(json).RootElement);
+        using var doc = JsonDocument.Parse(json);
+        return parser(doc.RootElement);
     }
 
     private async Task PostAsync(string endpoint, string body, CancellationToken ct)
@@ -80,7 +83,7 @@ public sealed class GvThreadClient : IGvThreadClient
 
         using var content = new StringContent(body, Encoding.UTF8, "application/json+protobuf");
         var response = await _httpClient
-            .PostAsync(new Uri($"voice/v1/voiceclient/{endpoint}?alt=protojson", UriKind.Relative), content, ct)
+            .PostAsync(new Uri($"voice/v1/voiceclient/{endpoint}?{_apiConfig.QueryString}", UriKind.Relative), content, ct)
             .ConfigureAwait(false);
 
         ThrowOnAuthError(response, endpoint);

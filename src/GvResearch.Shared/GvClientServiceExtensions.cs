@@ -20,36 +20,36 @@ public static class GvClientServiceExtensions
         var cookiePath = options.CookiePath;
         var keyPath = options.KeyPath;
         services.AddSingleton<IGvAuthService>(_ => new GvAuthService(cookiePath, keyPath));
-
-        services.AddTransient<GvHttpClientHandler>(sp =>
-        {
-            var auth = sp.GetRequiredService<IGvAuthService>();
-            return new GvHttpClientHandler(auth, new HttpClientHandler());
-        });
+        services.AddSingleton(new GvApiConfig { ApiKey = options.ApiKey });
 
         services.AddSingleton<GvRateLimiter>();
 
         services.AddHttpClient("GvApi", client =>
         {
             client.BaseAddress = new Uri("https://clients6.google.com");
+        })
+        .ConfigurePrimaryHttpMessageHandler(sp =>
+        {
+            var auth = sp.GetRequiredService<IGvAuthService>();
+            return new GvHttpClientHandler(auth, new HttpClientHandler());
         });
 
         services.AddSingleton<IGvAccountClient>(sp =>
         {
             var factory = sp.GetRequiredService<IHttpClientFactory>();
-            return new GvAccountClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>());
+            return new GvAccountClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>(), sp.GetRequiredService<GvApiConfig>());
         });
 
         services.AddSingleton<IGvThreadClient>(sp =>
         {
             var factory = sp.GetRequiredService<IHttpClientFactory>();
-            return new GvThreadClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>());
+            return new GvThreadClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>(), sp.GetRequiredService<GvApiConfig>());
         });
 
         services.AddSingleton<IGvSmsClient>(sp =>
         {
             var factory = sp.GetRequiredService<IHttpClientFactory>();
-            return new GvSmsClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>());
+            return new GvSmsClient(factory.CreateClient("GvApi"), sp.GetRequiredService<GvRateLimiter>(), sp.GetRequiredService<GvApiConfig>());
         });
 
         if (!services.Any(d => d.ServiceType == typeof(ICallTransport)))
