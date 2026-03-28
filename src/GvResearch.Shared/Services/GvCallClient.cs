@@ -10,12 +10,15 @@ public sealed class GvCallClient : IGvCallClient
     private readonly ICallTransport _transport;
     private readonly GvRateLimiter _rateLimiter;
 
+    public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived;
+
     public GvCallClient(ICallTransport transport, GvRateLimiter rateLimiter)
     {
         ArgumentNullException.ThrowIfNull(transport);
         ArgumentNullException.ThrowIfNull(rateLimiter);
         _transport = transport;
         _rateLimiter = rateLimiter;
+        _transport.IncomingCallReceived += (sender, args) => IncomingCallReceived?.Invoke(this, args);
     }
 
     public async Task<GvCallResult> InitiateAsync(string toNumber, CancellationToken ct = default)

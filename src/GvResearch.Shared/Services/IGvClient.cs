@@ -1,4 +1,5 @@
 using GvResearch.Shared.Models;
+using GvResearch.Shared.Transport;
 
 namespace GvResearch.Shared.Services;
 
@@ -35,6 +36,8 @@ public interface IGvSmsClient
 
 public interface IGvCallClient
 {
+    event EventHandler<IncomingCallEventArgs>? IncomingCallReceived;
+
     Task<GvCallResult> InitiateAsync(string toNumber, CancellationToken ct = default);
     Task<GvCallStatus> GetStatusAsync(string callId, CancellationToken ct = default);
     Task HangupAsync(string callId, CancellationToken ct = default);
