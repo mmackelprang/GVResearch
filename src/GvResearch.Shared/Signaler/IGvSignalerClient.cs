@@ -1,9 +1,19 @@
 namespace GvResearch.Shared.Signaler;
 
+public sealed class SignalerEventArgs(SignalerEvent signalerEvent) : EventArgs
+{
+    public SignalerEvent Event { get; } = signalerEvent;
+}
+
+public sealed class SignalerErrorEventArgs(Exception exception) : EventArgs
+{
+    public Exception Exception { get; } = exception;
+}
+
 public interface IGvSignalerClient : IAsyncDisposable
 {
-    event Action<SignalerEvent>? EventReceived;
-    event Action<Exception>? ErrorOccurred;
+    event EventHandler<SignalerEventArgs>? EventReceived;
+    event EventHandler<SignalerErrorEventArgs>? ErrorOccurred;
 
     Task ConnectAsync(CancellationToken ct = default);
     Task DisconnectAsync(CancellationToken ct = default);
