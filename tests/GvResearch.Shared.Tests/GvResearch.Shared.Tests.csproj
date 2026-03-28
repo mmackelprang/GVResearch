@@ -15,6 +15,8 @@
     <NoWarn>$(NoWarn);CA2213</NoWarn>
     <!-- CA1515: test class types do not need to be internal -->
     <NoWarn>$(NoWarn);CA1515</NoWarn>
+    <!-- CA1822: test helper methods intentionally use instance style for readability -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
