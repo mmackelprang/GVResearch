@@ -1,3 +1,5 @@
+using GvResearch.Shared.Services;
+using GvResearch.Shared.Transport;
 using GvResearch.Sip.Calls;
 using GvResearch.Sip.Configuration;
 using GvResearch.Sip.Registrar;
@@ -19,16 +21,19 @@ internal sealed class SipGatewayService : IHostedService
 {
     private readonly SipRegistrar _registrar;
     private readonly SipCallController _controller;
+    private readonly IGvCallClient _callClient;
     private readonly IOptions<SipGatewayOptions> _options;
     private readonly ILogger _logger;
 
     public SipGatewayService(
         SipRegistrar registrar,
         SipCallController controller,
+        IGvCallClient callClient,
         IOptions<SipGatewayOptions> options)
     {
         _registrar = registrar;
         _controller = controller;
+        _callClient = callClient;
         _options = options;
         _logger = Log.ForContext<SipGatewayService>();
     }
@@ -38,6 +43,7 @@ internal sealed class SipGatewayService : IHostedService
     {
         _registrar.InviteReceived += OnInviteReceived;
         _registrar.ByeReceived += OnByeReceived;
+        _callClient.IncomingCallReceived += OnIncomingCallReceived;
 
         var opts = _options.Value;
         _logger.Information(
@@ -52,6 +58,7 @@ internal sealed class SipGatewayService : IHostedService
     {
         _registrar.InviteReceived -= OnInviteReceived;
         _registrar.ByeReceived -= OnByeReceived;
+        _callClient.IncomingCallReceived -= OnIncomingCallReceived;
         _logger.Information("SIP gateway stopped.");
         return Task.CompletedTask;
     }
@@ -70,5 +77,10 @@ internal sealed class SipGatewayService : IHostedService
     private void OnByeReceived(object? sender, SipRequestEventArgs e)
     {
         _ = _controller.HangupAsync(e.Request.Header.CallId);
+    }
+
+    private void OnIncomingCallReceived(object? sender, IncomingCallEventArgs e)
+    {
+        _controller.HandleIncomingCall(e.CallInfo.CallId, e.CallInfo.CallerNumber);
     }
 }

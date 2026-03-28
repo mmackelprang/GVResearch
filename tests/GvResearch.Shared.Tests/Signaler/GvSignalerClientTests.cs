@@ -1,24 +1,14 @@
 using System.Net;
 using FluentAssertions;
-using GvResearch.Shared.Auth;
 using GvResearch.Shared.Signaler;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace GvResearch.Shared.Tests.Signaler;
 
 public sealed class GvSignalerClientTests : IAsyncDisposable
 {
-    private readonly IGvAuthService _authService = Substitute.For<IGvAuthService>();
     private readonly GvApiConfig _apiConfig = new() { ApiKey = "test-key" };
-
-    public GvSignalerClientTests()
-    {
-        _authService.GetValidCookiesAsync(Arg.Any<CancellationToken>())
-            .Returns(new GvCookieSet
-            {
-                Sapisid = "test", Sid = "s", Hsid = "h", Ssid = "ss", Apisid = "a"
-            });
-    }
 
     [Fact]
     public async Task ConnectAsync_SetsIsConnected()
@@ -31,7 +21,7 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
         using var httpClient = new HttpClient(handler)
             { BaseAddress = new Uri("https://signaler-pa.clients6.google.com") };
         var factory = CreateFactory(httpClient);
-        await using var sut = new GvSignalerClient(factory, _authService, _apiConfig);
+        await using var sut = new GvSignalerClient(factory, _apiConfig, Substitute.For<ILogger<GvSignalerClient>>());
 
         await sut.ConnectAsync();
 
@@ -49,7 +39,7 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
         using var httpClient = new HttpClient(handler)
             { BaseAddress = new Uri("https://signaler-pa.clients6.google.com") };
         var factory = CreateFactory(httpClient);
-        await using var sut = new GvSignalerClient(factory, _authService, _apiConfig);
+        await using var sut = new GvSignalerClient(factory, _apiConfig, Substitute.For<ILogger<GvSignalerClient>>());
 
         await sut.ConnectAsync();
         await sut.DisconnectAsync();
@@ -70,7 +60,7 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
         using var httpClient = new HttpClient(handler)
             { BaseAddress = new Uri("https://signaler-pa.clients6.google.com") };
         var factory = CreateFactory(httpClient);
-        await using var sut = new GvSignalerClient(factory, _authService, _apiConfig);
+        await using var sut = new GvSignalerClient(factory, _apiConfig, Substitute.For<ILogger<GvSignalerClient>>());
 
         SignalerEvent? received = null;
         sut.EventReceived += (_, args) => received = args.Event;
@@ -95,7 +85,7 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
         using var httpClient = new HttpClient(handler)
             { BaseAddress = new Uri("https://signaler-pa.clients6.google.com") };
         var factory = CreateFactory(httpClient);
-        await using var sut = new GvSignalerClient(factory, _authService, _apiConfig);
+        await using var sut = new GvSignalerClient(factory, _apiConfig, Substitute.For<ILogger<GvSignalerClient>>());
 
         await sut.ConnectAsync();
         await sut.SendSdpOfferAsync("call-x", "v=0\r\n");

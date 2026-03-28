@@ -2,6 +2,7 @@ using FluentAssertions;
 using GvResearch.Shared.Models;
 using GvResearch.Shared.Signaler;
 using GvResearch.Shared.Transport;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace GvResearch.Sip.Tests.Transport;
@@ -13,7 +14,7 @@ public sealed class WebRtcCallTransportTests : IAsyncDisposable
     [Fact]
     public async Task HangupAsync_SendsHangupViaSignaler()
     {
-        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler);
+        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler, Substitute.For<ILogger<GvResearch.Sip.Transport.WebRtcCallTransport>>());
 
         await sut.HangupAsync("call-123");
 
@@ -23,7 +24,7 @@ public sealed class WebRtcCallTransportTests : IAsyncDisposable
     [Fact]
     public async Task GetStatusAsync_ReturnsUnknownForNonexistentCall()
     {
-        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler);
+        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler, Substitute.For<ILogger<GvResearch.Sip.Transport.WebRtcCallTransport>>());
 
         var status = await sut.GetStatusAsync("nonexistent");
 
@@ -33,7 +34,7 @@ public sealed class WebRtcCallTransportTests : IAsyncDisposable
     [Fact]
     public async Task IncomingSdpOffer_FiresIncomingCallReceived()
     {
-        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler);
+        await using var sut = new GvResearch.Sip.Transport.WebRtcCallTransport(_signaler, Substitute.For<ILogger<GvResearch.Sip.Transport.WebRtcCallTransport>>());
 
         IncomingCallInfo? received = null;
         sut.IncomingCallReceived += (_, args) => received = args.CallInfo;

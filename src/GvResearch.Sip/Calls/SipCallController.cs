@@ -29,6 +29,10 @@ public sealed class SipCallController : IDisposable
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(5, "HangupNotFound"),
             "Hangup requested for unknown call {CallId}.");
 
+    private static readonly Action<ILogger, string, string, string, Exception?> LogIncomingCall =
+        LoggerMessage.Define<string, string, string>(LogLevel.Information, new EventId(6, "IncomingCall"),
+            "Incoming GV call {GvCallId} from {Caller}, registered as SIP call {CallId}.");
+
     private readonly IGvCallClient _callClient;
     private readonly ILogger<SipCallController> _logger;
     private readonly ConcurrentDictionary<string, CallSession> _activeCalls =
@@ -116,6 +120,28 @@ public sealed class SipCallController : IDisposable
         }
 
         session.Dispose();
+    }
+
+    /// <summary>
+    /// Registers an incoming GV call as a new ringing session.
+    /// </summary>
+    /// <param name="gvCallId">The GV-assigned call identifier.</param>
+    /// <param name="callerNumber">The caller's phone number.</param>
+    /// <returns>The created <see cref="CallSession"/> in the <see cref="CallState.Ringing"/> state.</returns>
+    public CallSession HandleIncomingCall(string gvCallId, string callerNumber)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(gvCallId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(callerNumber);
+
+        var sipCallId = $"incoming-{gvCallId}";
+        var session = new CallSession(sipCallId, callerNumber);
+        session.GvCallId = gvCallId;
+        session.TransitionTo(CallState.Ringing);
+        _activeCalls[sipCallId] = session;
+
+        LogIncomingCall(_logger, gvCallId, callerNumber, sipCallId, null);
+        return session;
     }
 
     /// <summary>

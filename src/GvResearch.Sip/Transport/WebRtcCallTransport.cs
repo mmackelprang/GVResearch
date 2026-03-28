@@ -2,28 +2,61 @@ using System.Collections.Concurrent;
 using GvResearch.Shared.Models;
 using GvResearch.Shared.Signaler;
 using GvResearch.Shared.Transport;
+using Microsoft.Extensions.Logging;
 using SIPSorcery.Net;
 
 namespace GvResearch.Sip.Transport;
 
 public sealed class WebRtcCallTransport : ICallTransport
 {
+    private static readonly Action<ILogger, string, string, Exception?> LogInitiating =
+        LoggerMessage.Define<string, string>(LogLevel.Information, new EventId(1, "CallInitiating"),
+            "Initiating outgoing call {CallId} to {ToNumber}");
+
+    private static readonly Action<ILogger, string, Exception?> LogAnswerReceived =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(2, "CallAnswerReceived"),
+            "Outgoing call {CallId} SDP answer received");
+
+    private static readonly Action<ILogger, string, Exception?> LogIncoming =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(3, "CallIncoming"),
+            "Incoming call {CallId}, sending SDP answer");
+
+    private static readonly Action<ILogger, string, Exception?> LogRenegotiating =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(4, "CallRenegotiating"),
+            "Renegotiating call {CallId}");
+
+    private static readonly Action<ILogger, string, Exception?> LogHangingUp =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(5, "CallHangingUp"),
+            "Hanging up call {CallId}");
+
+    private static readonly Action<ILogger, string, Exception?> LogRemoteHangup =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(6, "CallRemoteHangup"),
+            "Remote hangup for call {CallId}");
+
+    private static readonly Action<ILogger, Exception?> LogEventHandlerError =
+        LoggerMessage.Define(LogLevel.Warning, new EventId(7, "EventHandlerError"),
+            "Unhandled exception in signaler event handler.");
+
     private readonly IGvSignalerClient _signaler;
+    private readonly ILogger<WebRtcCallTransport> _logger;
     private readonly ConcurrentDictionary<string, WebRtcCallSession> _activeCalls = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pendingAnswers = new();
 
     public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived;
 
-    public WebRtcCallTransport(IGvSignalerClient signaler)
+    public WebRtcCallTransport(IGvSignalerClient signaler, ILogger<WebRtcCallTransport> logger)
     {
         ArgumentNullException.ThrowIfNull(signaler);
+        ArgumentNullException.ThrowIfNull(logger);
         _signaler = signaler;
+        _logger = logger;
         _signaler.EventReceived += OnSignalerEvent;
     }
 
     public async Task<TransportCallResult> InitiateAsync(string toNumber, CancellationToken ct = default)
     {
         var callId = $"out-{Guid.NewGuid():N}";
+        LogInitiating(_logger, callId, toNumber, null);
         var session = new WebRtcCallSession(callId);
         _activeCalls[callId] = session;
 
@@ -50,6 +83,8 @@ public sealed class WebRtcCallTransport : ICallTransport
             {
                 _pendingAnswers.TryRemove(callId, out _);
             }
+
+            LogAnswerReceived(_logger, callId, null);
 
             var answer = new RTCSessionDescriptionInit
             {
@@ -88,6 +123,7 @@ public sealed class WebRtcCallTransport : ICallTransport
 
     public async Task HangupAsync(string callId, CancellationToken ct = default)
     {
+        LogHangingUp(_logger, callId, null);
         await _signaler.SendHangupAsync(callId, ct).ConfigureAwait(false);
 
         if (_activeCalls.TryRemove(callId, out var session))
@@ -116,15 +152,30 @@ public sealed class WebRtcCallTransport : ICallTransport
     {
         if (_activeCalls.TryGetValue(offer.CallId, out var existingSession))
         {
-            _ = HandleRenegotiationAsync(existingSession, offer);
+            _ = SafeFireAndForgetAsync(HandleRenegotiationAsync(existingSession, offer));
             return;
         }
 
-        _ = HandleNewIncomingCallAsync(offer);
+        _ = SafeFireAndForgetAsync(HandleNewIncomingCallAsync(offer));
+    }
+
+    private async Task SafeFireAndForgetAsync(Task task)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // Catch-all is intentional: unhandled errors from signaler event handlers must not crash the poll loop
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            LogEventHandlerError(_logger, ex);
+        }
     }
 
     private async Task HandleNewIncomingCallAsync(IncomingSdpOfferEvent offer)
     {
+        LogIncoming(_logger, offer.CallId, null);
         var session = new WebRtcCallSession(offer.CallId);
         _activeCalls[offer.CallId] = session;
 
@@ -158,6 +209,7 @@ public sealed class WebRtcCallTransport : ICallTransport
 
     private async Task HandleRenegotiationAsync(WebRtcCallSession session, IncomingSdpOfferEvent offer)
     {
+        LogRenegotiating(_logger, offer.CallId, null);
         try
         {
             var remoteDesc = new RTCSessionDescriptionInit
@@ -190,6 +242,7 @@ public sealed class WebRtcCallTransport : ICallTransport
 
     private void HandleRemoteHangup(CallHangupEvent hangup)
     {
+        LogRemoteHangup(_logger, hangup.CallId, null);
         if (_activeCalls.TryRemove(hangup.CallId, out var session))
         {
             session.UpdateStatus(CallStatusType.Completed);
@@ -200,6 +253,13 @@ public sealed class WebRtcCallTransport : ICallTransport
     public async ValueTask DisposeAsync()
     {
         _signaler.EventReceived -= OnSignalerEvent;
+
+        // Cancel any pending outgoing call SDP answer waits
+        foreach (var tcs in _pendingAnswers.Values)
+        {
+            tcs.TrySetCanceled();
+        }
+        _pendingAnswers.Clear();
 
         foreach (var session in _activeCalls.Values)
         {

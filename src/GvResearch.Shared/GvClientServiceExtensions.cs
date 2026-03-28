@@ -38,6 +38,11 @@ public static class GvClientServiceExtensions
         {
             client.BaseAddress = new Uri("https://signaler-pa.clients6.google.com");
             client.Timeout = TimeSpan.FromMinutes(5);
+        })
+        .ConfigurePrimaryHttpMessageHandler(sp =>
+        {
+            var auth = sp.GetRequiredService<IGvAuthService>();
+            return new GvHttpClientHandler(auth, new HttpClientHandler());
         });
 
         services.AddSingleton<IGvAccountClient>(sp =>

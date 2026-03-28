@@ -1,13 +1,33 @@
 using System.Text;
-using GvResearch.Shared.Auth;
+using Microsoft.Extensions.Logging;
 
 namespace GvResearch.Shared.Signaler;
 
 public sealed class GvSignalerClient : IGvSignalerClient
 {
+    private static readonly Action<ILogger, string, Exception?> LogConnected =
+        LoggerMessage.Define<string>(LogLevel.Information, new EventId(1, "SignalerConnected"),
+            "Signaler connected, SID={Sid}");
+
+    private static readonly Action<ILogger, Exception?> LogDisconnected =
+        LoggerMessage.Define(LogLevel.Information, new EventId(2, "SignalerDisconnected"),
+            "Signaler disconnected");
+
+    private static readonly Action<ILogger, string, string, Exception?> LogSending =
+        LoggerMessage.Define<string, string>(LogLevel.Debug, new EventId(3, "SignalerSending"),
+            "Sending {Type} for call {CallId}");
+
+    private static readonly Action<ILogger, double, Exception?> LogPollError =
+        LoggerMessage.Define<double>(LogLevel.Warning, new EventId(4, "SignalerPollError"),
+            "Signaler poll error, retrying in {Backoff}s");
+
+    private static readonly Action<ILogger, int, Exception?> LogPollReceived =
+        LoggerMessage.Define<int>(LogLevel.Debug, new EventId(5, "SignalerPollReceived"),
+            "Signaler received {Count} events");
+
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IGvAuthService _authService;
     private readonly GvApiConfig _apiConfig;
+    private readonly ILogger<GvSignalerClient> _logger;
 
     private string? _sessionId;
     private int _aid;
@@ -21,16 +41,16 @@ public sealed class GvSignalerClient : IGvSignalerClient
 
     public GvSignalerClient(
         IHttpClientFactory httpClientFactory,
-        IGvAuthService authService,
-        GvApiConfig apiConfig)
+        GvApiConfig apiConfig,
+        ILogger<GvSignalerClient> logger)
     {
         ArgumentNullException.ThrowIfNull(httpClientFactory);
-        ArgumentNullException.ThrowIfNull(authService);
         ArgumentNullException.ThrowIfNull(apiConfig);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _httpClientFactory = httpClientFactory;
-        _authService = authService;
         _apiConfig = apiConfig;
+        _logger = logger;
     }
 
     public async Task ConnectAsync(CancellationToken ct = default)
@@ -61,10 +81,12 @@ public sealed class GvSignalerClient : IGvSignalerClient
         _sessionId = ExtractSessionId(openBody);
         _aid = 0;
 
-        // 3. Start poll loop
-        _pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        // 3. Start poll loop — use a standalone CTS so the loop only stops on Disconnect/Dispose,
+        //    not when the caller's token is cancelled after ConnectAsync returns.
+        _pollCts = new CancellationTokenSource();
         _pollTask = PollLoopAsync(_pollCts.Token);
         IsConnected = true;
+        LogConnected(_logger, _sessionId, null);
     }
 
     public async Task DisconnectAsync(CancellationToken ct = default)
@@ -86,6 +108,7 @@ public sealed class GvSignalerClient : IGvSignalerClient
         _pollCts = null;
         _pollTask = null;
         _sessionId = null;
+        LogDisconnected(_logger, null);
     }
 
     public async Task SendSdpOfferAsync(string callId, string sdp, CancellationToken ct = default) =>
@@ -101,6 +124,8 @@ public sealed class GvSignalerClient : IGvSignalerClient
     {
         if (_sessionId is null)
             throw new InvalidOperationException("Not connected. Call ConnectAsync first.");
+
+        LogSending(_logger, type, callId, null);
 
         var client = CreateClient();
         var rid = Interlocked.Increment(ref _rid);
@@ -137,6 +162,7 @@ public sealed class GvSignalerClient : IGvSignalerClient
                 {
                     ErrorOccurred?.Invoke(this, new SignalerErrorEventArgs(
                         new HttpRequestException($"Signaler poll returned {(int)response.StatusCode}")));
+                    LogPollError(_logger, backoff.TotalSeconds, null);
                     await Task.Delay(backoff, ct).ConfigureAwait(false);
                     backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, maxBackoff.TotalSeconds));
                     continue;
@@ -144,6 +170,8 @@ public sealed class GvSignalerClient : IGvSignalerClient
 
                 var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 var events = SignalerMessageParser.Parse(body);
+
+                LogPollReceived(_logger, events.Count, null);
 
                 foreach (var evt in events)
                 {
@@ -162,6 +190,7 @@ public sealed class GvSignalerClient : IGvSignalerClient
 #pragma warning restore CA1031
             {
                 ErrorOccurred?.Invoke(this, new SignalerErrorEventArgs(ex));
+                LogPollError(_logger, backoff.TotalSeconds, ex);
                 await Task.Delay(backoff, ct).ConfigureAwait(false);
                 backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, maxBackoff.TotalSeconds));
             }
