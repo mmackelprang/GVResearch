@@ -34,6 +34,12 @@ public static class GvClientServiceExtensions
             return new GvHttpClientHandler(auth, new HttpClientHandler());
         });
 
+        services.AddHttpClient("GvSignaler", client =>
+        {
+            client.BaseAddress = new Uri("https://signaler-pa.clients6.google.com");
+            client.Timeout = TimeSpan.FromMinutes(5);
+        });
+
         services.AddSingleton<IGvAccountClient>(sp =>
         {
             var factory = sp.GetRequiredService<IHttpClientFactory>();
@@ -77,6 +83,12 @@ public static class GvClientServiceExtensions
     Justification = "Instantiated by the DI container via reflection.")]
 internal sealed class NullCallTransport : ICallTransport
 {
+    public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived
+    {
+        add { }
+        remove { }
+    }
+
     public Task<TransportCallResult> InitiateAsync(string toNumber, CancellationToken ct) =>
         throw new NotImplementedException("No call transport configured. Register an ICallTransport implementation.");
 
