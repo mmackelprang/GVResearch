@@ -35,6 +35,8 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 - **`GvAuthService`** loads encrypted cookies from disk, caches in memory, computes SAPISIDHASH
 - **`GvProtobufJsonParser`** / **`GvRequestBuilder`** handle protobuf-JSON ↔ C# model translation
 - **`ICallTransport`** abstracts voice calls — SIP first, WebRTC/Callback pluggable later
+- **`GvSignalerClient`** — long-poll push channel for real-time call signaling events
+- **`WebRtcCallTransport`** — `ICallTransport` implementation using SIPSorcery `RTCPeerConnection` for WebRTC audio transport
 - Rate limiting (`GvRateLimiter.cs`) enforced per-endpoint in every sub-client
 - Auth encryption (`TokenEncryption.cs`) encrypts/decrypts the full cookie set (AES-256)
 
@@ -42,8 +44,7 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 1. **`SipCallTransport`** — `ICallTransport` implementation using SIPSorcery + `sipregisterinfo/get`
 2. **`LoginInteractiveAsync()`** — Playwright-based one-time browser login to populate cookies
 3. **`TryRefreshSessionAsync()`** — Health check via `threadinginfo/get` + cookie refresh cascade
-4. **`GvSignalerClient`** — Long-poll push channel for real-time notifications
-5. **Voicemail service** — List, play (signed URL), delete, transcription access
+4. **Voicemail service** — List, play (signed URL), delete, transcription access
 
 ## Coding Conventions
 
@@ -69,9 +70,11 @@ src/
     Protocol/              — GvProtobufJsonParser, GvRequestBuilder
     RateLimiting/          — GvRateLimiter (per-endpoint dual-window)
     Services/              — IGvClient, GvClient, sub-client implementations
+    Signaler/              — IGvSignalerClient, GvSignalerClient, SignalerEvent types, SignalerMessageParser
     Transport/             — ICallTransport, TransportCallResult, TransportCallStatus
   GvResearch.Client.Cli/   — CLI tool for headless GV operations (future)
-  GvResearch.Sip/          — SIP gateway (uses IGvClient via AddGvClient())
+  GvResearch.Sip/          — SIP gateway (uses IGvClient + IGvSignalerClient + WebRtcCallTransport)
+    Transport/             — WebRtcCallTransport, WebRtcCallSession
   GvResearch.Softphone/    — Softphone UI (Avalonia, future)
 docs/
   api-research/            — API reference and integration guides (READ FIRST)
