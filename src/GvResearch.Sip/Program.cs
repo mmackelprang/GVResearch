@@ -3,8 +3,10 @@ using System.Net;
 using GvResearch.Shared;
 using GvResearch.Sip.Calls;
 using GvResearch.Sip.Configuration;
-using GvResearch.Sip.Media;
+using GvResearch.Shared.Signaler;
+using GvResearch.Shared.Transport;
 using GvResearch.Sip.Registrar;
+using GvResearch.Sip.Transport;
 using GvResearch.Sip;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -43,8 +45,9 @@ try
             services.AddSingleton<RegistrationStore>();
             services.AddSingleton<SipRegistrar>();
 
-            // ── Media ─────────────────────────────────────────────────────────
-            services.AddSingleton<IGvAudioChannel, WebRtcGvAudioChannel>();
+            // ── Signaler + WebRTC Transport ─────────────────────────────────
+            services.AddSingleton<IGvSignalerClient, GvSignalerClient>();
+            services.AddSingleton<ICallTransport, WebRtcCallTransport>();
 
             // ── GV SDK ───────────────────────────────────────────────────────
             services.AddGvClient(options =>
