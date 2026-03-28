@@ -77,11 +77,10 @@ public sealed class GvAuthService : IGvAuthService, IDisposable
         var hash = Convert.ToHexStringLower(
             SHA1.HashData(Encoding.UTF8.GetBytes(input)));
 #pragma warning restore CA5350
-        return string.Concat(
-            "SAPISIDHASH ",
-            timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "_",
-            hash);
+        var ts = timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Google expects triple auth: SAPISIDHASH, SAPISID1PHASH, SAPISID3PHASH
+        // All use the same hash (computed from SAPISID + origin)
+        return $"SAPISIDHASH {ts}_{hash} SAPISID1PHASH {ts}_{hash} SAPISID3PHASH {ts}_{hash}";
     }
 
     public void Dispose()

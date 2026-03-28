@@ -13,8 +13,19 @@ public sealed class GvCookieSet
     public string? Secure1Psid { get; init; }
     public string? Secure3Psid { get; init; }
 
+    /// <summary>
+    /// Full raw cookie header captured from the browser. When present,
+    /// ToCookieHeader() returns this verbatim instead of building from
+    /// individual fields. Google requires many cookies beyond the core 7
+    /// (SIDCC, __Secure-1PSIDCC, NID, etc.) for auth to succeed.
+    /// </summary>
+    public string? RawCookieHeader { get; init; }
+
     public string ToCookieHeader()
     {
+        if (!string.IsNullOrEmpty(RawCookieHeader))
+            return RawCookieHeader;
+
         var sb = new StringBuilder();
         sb.Append("SAPISID=").Append(Sapisid)
           .Append("; SID=").Append(Sid)

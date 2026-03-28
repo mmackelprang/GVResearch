@@ -17,7 +17,15 @@ public static class GvProtobufJsonParser
 
     public static GvAccount ParseAccount(JsonElement root)
     {
-        var phoneNumber = root[0].GetString() ?? string.Empty;
+        // root[0] can be a string (phone number) or an array (nested config).
+        // The real GV response wraps the account in an outer array.
+        var firstEl = root[0];
+        var phoneNumber = firstEl.ValueKind == JsonValueKind.String
+            ? firstEl.GetString() ?? string.Empty
+            : (firstEl.ValueKind == JsonValueKind.Array && firstEl.GetArrayLength() > 0
+                && firstEl[0].ValueKind == JsonValueKind.String
+                    ? firstEl[0].GetString() ?? string.Empty
+                    : string.Empty);
         var phones = new List<GvPhoneNumber>
         {
             new(phoneNumber, PhoneNumberType.GoogleVoice, IsPrimary: true)

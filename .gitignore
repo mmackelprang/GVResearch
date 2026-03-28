@@ -18,6 +18,11 @@ appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
 
+## Encrypted auth files (cookies + keys — NEVER commit)
+cookies.enc
+key.bin
+*.enc.bak
+
 ## User secrets are in %APPDATA% - never in repo
 
 ## Coverage
