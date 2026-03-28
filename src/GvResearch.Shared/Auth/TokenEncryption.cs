@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace GvResearch.Shared.Authentication;
+namespace GvResearch.Shared.Auth;
 
 /// <summary>
 /// AES-256 encrypt/decrypt helpers. The IV (16 bytes) is prepended to the ciphertext.

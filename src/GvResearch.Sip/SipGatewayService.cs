@@ -67,11 +67,25 @@ internal sealed class SipGatewayService : IHostedService
     {
         var request = e.Request;
         var destination = request.URI.User;
+        var callId = request.Header.CallId;
 
-        // Fire-and-forget: any errors are logged inside CreateOutboundCallAsync.
-        _ = _controller.CreateOutboundCallAsync(
-            sipCallId: request.Header.CallId,
-            destinationNumber: destination);
+        // Fire-and-forget: wrap in Task.Run so exceptions are caught and logged
+        // rather than silently swallowed or crashing the thread-pool.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _controller.CreateOutboundCallAsync(
+                    sipCallId: callId,
+                    destinationNumber: destination).ConfigureAwait(false);
+            }
+#pragma warning disable CA1031 // Catch-all is intentional: fire-and-forget must log all failures
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                _logger.Error(ex, "Failed to create outbound call for SIP INVITE {CallId}", callId);
+            }
+        });
     }
 
     private void OnByeReceived(object? sender, SipRequestEventArgs e)

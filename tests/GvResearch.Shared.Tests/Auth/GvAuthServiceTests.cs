@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
 using GvResearch.Shared.Auth;
-using GvResearch.Shared.Authentication;
 
 namespace GvResearch.Shared.Tests.Auth;
 

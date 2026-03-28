@@ -46,6 +46,9 @@ try
             services.AddSingleton<SipRegistrar>();
 
             // ── Signaler + WebRTC Transport ─────────────────────────────────
+            // NOTE: ICallTransport and IGvSignalerClient must be registered BEFORE AddGvClient()
+            // so that AddGvClient() finds them and skips NullCallTransport registration.
+            // The HttpClient named "GvSignaler" is registered inside AddGvClient().
             services.AddSingleton<IGvSignalerClient, GvSignalerClient>();
             services.AddSingleton<ICallTransport, WebRtcCallTransport>();
 
