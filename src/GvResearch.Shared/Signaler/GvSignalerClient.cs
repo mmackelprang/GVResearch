@@ -25,6 +25,10 @@ public sealed class GvSignalerClient : IGvSignalerClient
         LoggerMessage.Define<int>(LogLevel.Debug, new EventId(5, "SignalerPollReceived"),
             "Signaler received {Count} events");
 
+    private static readonly Action<ILogger, string, Exception?> LogChooseServerResponse =
+        LoggerMessage.Define<string>(LogLevel.Debug, new EventId(6, "SignalerChooseServer"),
+            "Signaler chooseServer response: {Response}");
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly GvApiConfig _apiConfig;
     private readonly ILogger<GvSignalerClient> _logger;
@@ -66,6 +70,10 @@ public sealed class GvSignalerClient : IGvSignalerClient
                 ct)
             .ConfigureAwait(false);
         chooseResponse.EnsureSuccessStatusCode();
+        var chooseBody2 = await chooseResponse.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        // Note: chooseServer may return a specific host. We log it but continue using
+        // the configured base URL. In production, the base URL is the correct endpoint.
+        LogChooseServerResponse(_logger, chooseBody2, null);
 
         // 2. Open channel — get SID
         _rid = 0;
@@ -144,6 +152,8 @@ public sealed class GvSignalerClient : IGvSignalerClient
 
     private async Task PollLoopAsync(CancellationToken ct)
     {
+        // Create the client once to avoid socket exhaustion from per-iteration HttpClient creation.
+        var client = CreateClient();
         var backoff = TimeSpan.FromSeconds(1);
         var maxBackoff = TimeSpan.FromSeconds(30);
 
@@ -151,7 +161,6 @@ public sealed class GvSignalerClient : IGvSignalerClient
         {
             try
             {
-                var client = CreateClient();
                 var url = BuildChannelUrl(rid: "rpc", type: "xmlhttp");
 
                 var response = await client
@@ -178,7 +187,8 @@ public sealed class GvSignalerClient : IGvSignalerClient
                     EventReceived?.Invoke(this, new SignalerEventArgs(evt));
                 }
 
-                Interlocked.Increment(ref _aid);
+                if (events.Count > 0)
+                    Interlocked.Add(ref _aid, events.Count);
                 backoff = TimeSpan.FromSeconds(1);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

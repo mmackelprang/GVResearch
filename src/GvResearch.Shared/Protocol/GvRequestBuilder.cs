@@ -27,7 +27,7 @@ public static class GvRequestBuilder
         writer.WriteStartArray();
         writer.WriteNumberValue(type);
         writer.WriteNumberValue(pageSize);
-        writer.WriteNullValue();
+        writer.WriteNumberValue(15); // flags (observed in captures)
         if (cursor is not null)
             writer.WriteStringValue(cursor);
         else
@@ -76,7 +76,7 @@ public static class GvRequestBuilder
         writer.WriteStringValue(threadId);
         writer.WriteNullValue();
         writer.WriteNullValue();
-        writer.WriteStartArray(); writer.WriteEndArray();
+        writer.WriteStartArray(); writer.WriteEndArray(); // device IDs — empty = server default; populate with account device ID for explicit routing
         writer.WriteEndArray();
         writer.Flush();
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());

@@ -13,10 +13,11 @@ internal sealed class WebRtcCallSession : IDisposable
     };
 
     private bool _disposed;
+    private volatile CallStatusType _status = CallStatusType.Unknown;
 
     public string CallId { get; }
     public RTCPeerConnection PeerConnection { get; }
-    public CallStatusType Status { get; private set; } = CallStatusType.Unknown;
+    public CallStatusType Status => _status;
 
     public event Action<RTPPacket>? AudioReceived;
 
@@ -44,13 +45,13 @@ internal sealed class WebRtcCallSession : IDisposable
 
         PeerConnection.onconnectionstatechange += state =>
         {
-            Status = state switch
+            _status = state switch
             {
                 RTCPeerConnectionState.connecting => CallStatusType.Ringing,
                 RTCPeerConnectionState.connected => CallStatusType.Active,
                 RTCPeerConnectionState.closed => CallStatusType.Completed,
                 RTCPeerConnectionState.failed => CallStatusType.Failed,
-                _ => Status,
+                _ => _status,
             };
         };
     }
@@ -68,10 +69,7 @@ internal sealed class WebRtcCallSession : IDisposable
             packet.Header.PayloadType);
     }
 
-    public void UpdateStatus(CallStatusType status)
-    {
-        Status = status;
-    }
+    public void UpdateStatus(CallStatusType status) => _status = status;
 
     private void OnRtpPacketReceived(IPEndPoint remoteEndPoint, SDPMediaTypesEnum mediaType, RTPPacket packet)
     {

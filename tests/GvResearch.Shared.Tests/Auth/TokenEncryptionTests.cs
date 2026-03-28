@@ -1,5 +1,5 @@
 using FluentAssertions;
-using GvResearch.Shared.Authentication;
+using GvResearch.Shared.Auth;
 
 namespace GvResearch.Shared.Tests.Auth;
 

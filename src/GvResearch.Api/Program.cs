@@ -36,6 +36,9 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 
 var app = builder.Build();
 
+Log.Warning("API authentication is using placeholder bearer handler — accepts ANY token. " +
+    "Do not expose beyond localhost until Phase 2 auth is implemented.");
+
 app.UseSerilogRequestLogging();
 app.UseAuthentication();
 app.UseAuthorization();

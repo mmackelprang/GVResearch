@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using GvResearch.Shared.Authentication;
 using GvResearch.Shared.Exceptions;
 
 namespace GvResearch.Shared.Auth;

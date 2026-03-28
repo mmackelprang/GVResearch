@@ -39,14 +39,16 @@ public sealed class GvRateLimiter : IDisposable
         var minuteLimiter = _minuteLimiters.GetOrAdd(endpoint, CreateMinuteLimiter);
         var dayLimiter = _dayLimiters.GetOrAdd(endpoint, CreateDayLimiter);
 
-        using var minuteLease = await minuteLimiter.AcquireAsync(permitCount: 1, cancellationToken).ConfigureAwait(false);
-        if (!minuteLease.IsAcquired)
+        // Check the day limit first (more constrained, resets less frequently).
+        // This avoids consuming a minute permit when the day budget is already exhausted.
+        using var dayLease = await dayLimiter.AcquireAsync(permitCount: 1, cancellationToken).ConfigureAwait(false);
+        if (!dayLease.IsAcquired)
         {
             return false;
         }
 
-        using var dayLease = await dayLimiter.AcquireAsync(permitCount: 1, cancellationToken).ConfigureAwait(false);
-        return dayLease.IsAcquired;
+        using var minuteLease = await minuteLimiter.AcquireAsync(permitCount: 1, cancellationToken).ConfigureAwait(false);
+        return minuteLease.IsAcquired;
     }
 
     private FixedWindowRateLimiter CreateMinuteLimiter(string _) =>

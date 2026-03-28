@@ -22,6 +22,7 @@ public sealed class GvRequestBuilderTests
         var root = doc.RootElement;
         root[0].GetInt32().Should().Be(2);
         root[1].GetInt32().Should().Be(50);
+        root[2].GetInt32().Should().Be(15, "flags field observed in captures");
     }
 
     [Fact]

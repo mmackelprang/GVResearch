@@ -19,5 +19,9 @@ public sealed class GvClient : IGvClient
     public IGvSmsClient Sms { get; }
     public IGvCallClient Calls { get; }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public async ValueTask DisposeAsync()
+    {
+        if (Calls is IAsyncDisposable disposableCalls)
+            await disposableCalls.DisposeAsync().ConfigureAwait(false);
+    }
 }
