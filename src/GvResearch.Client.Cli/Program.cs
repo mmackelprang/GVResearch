@@ -134,7 +134,7 @@ Console.WriteLine($"Logged in! URL: {page.Url}");
 var allCookies = await context.CookiesAsync([
     "https://voice.google.com",
     "https://clients6.google.com",
-    "https://signaler-pa.clients6.google.com",
+    "https://clients6.google.com",
     "https://www.google.com",
 ]).ConfigureAwait(false);
 
@@ -164,7 +164,8 @@ Console.WriteLine($"Cookie header: {cookieHeader.Length} chars total");
 if (captureSignaler)
 {
     Console.WriteLine();
-    Console.WriteLine("Capturing signaler traffic for 15 seconds...");
+    Console.WriteLine("Capturing ALL clients6.google.com traffic for 30 seconds...");
+    Console.WriteLine(">>> MAKE A CALL from the GV web UI now! <<<");
     var signalerCaptures = new List<object>();
 
     // Use CDP to capture network traffic (more reliable than page events for existing pages)
@@ -177,7 +178,7 @@ if (captureSignaler)
     {
         var json = JsonSerializer.Deserialize<JsonElement>(args.ToString()!);
         var reqUrl = json.GetProperty("request").GetProperty("url").GetString() ?? "";
-        if (reqUrl.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
+        if (reqUrl.Contains("clients6.google.com", StringComparison.OrdinalIgnoreCase))
         {
             var requestId = json.GetProperty("requestId").GetString() ?? "";
             var method = json.GetProperty("request").GetProperty("method").GetString();
@@ -204,7 +205,7 @@ if (captureSignaler)
     {
         var json = JsonSerializer.Deserialize<JsonElement>(args.ToString()!);
         var respUrl = json.GetProperty("response").GetProperty("url").GetString() ?? "";
-        if (respUrl.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
+        if (respUrl.Contains("clients6.google.com", StringComparison.OrdinalIgnoreCase))
         {
             var status = json.GetProperty("response").GetProperty("status").GetInt32();
             var requestId = json.GetProperty("requestId").GetString() ?? "";
@@ -244,21 +245,9 @@ if (captureSignaler)
         }
     };
 
-    // Reload to trigger signaler connection (don't wait for networkidle — signaler long-poll never settles)
-    try
-    {
-        await page.ReloadAsync(new PageReloadOptions
-        {
-            WaitUntil = WaitUntilState.DOMContentLoaded,
-            Timeout = 15_000,
-        }).ConfigureAwait(false);
-    }
-    catch (TimeoutException)
-    {
-        // Expected — signaler keeps connection open
-    }
-    Console.WriteLine("Waiting 15 seconds for signaler traffic...");
-    await Task.Delay(15_000).ConfigureAwait(false);
+    // Don't reload — just start capturing on the existing page
+    Console.WriteLine("Waiting 30 seconds — make a call from the GV web UI now...");
+    await Task.Delay(30_000).ConfigureAwait(false);
 
     await cdpSession.SendAsync("Network.disable").ConfigureAwait(false);
 
