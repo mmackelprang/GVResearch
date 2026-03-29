@@ -308,6 +308,73 @@ public sealed class SipWssCallTransport : ICallTransport
                             regTcs.TrySetResult(false);
                         }
                     }
+
+                    // Handle INVITE responses — send PRACK for 100rel provisional responses
+                    if (resp.Header.CSeqMethod == SIPMethodsEnum.INVITE)
+                    {
+                        var statusCode = (int)resp.Status;
+
+                        if (statusCode == 183 || statusCode == 180)
+                        {
+                            // Extract RSeq for PRACK
+                            var rseqIdx = message.IndexOf("RSeq:", StringComparison.OrdinalIgnoreCase);
+                            if (rseqIdx < 0)
+                                rseqIdx = message.IndexOf("RSseq:", StringComparison.OrdinalIgnoreCase);
+
+                            if (rseqIdx >= 0)
+                            {
+                                var rseqEnd = message.IndexOf("\r\n", rseqIdx, StringComparison.Ordinal);
+                                var rseqLine = message[(rseqIdx)..rseqEnd];
+                                var rseqValue = rseqLine[(rseqLine.IndexOf(':', StringComparison.Ordinal) + 1)..].Trim();
+
+                                // Extract To tag from response
+                                var toIdx = message.IndexOf("To:", StringComparison.OrdinalIgnoreCase);
+                                var toEnd = message.IndexOf("\r\n", toIdx, StringComparison.Ordinal);
+                                var toHeader = message[(toIdx + 3)..toEnd].Trim();
+
+                                var cseq = resp.Header.CSeq;
+
+                                // Build PRACK
+                                var prack =
+                                    $"PRACK sip:{resp.Header.Contact[0].ContactURI} SIP/2.0\r\n" +
+                                    $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                                    $"From: {resp.Header.From}\r\n" +
+                                    $"To: {toHeader}\r\n" +
+                                    $"Call-ID: {resp.Header.CallId}\r\n" +
+                                    $"CSeq: 2 PRACK\r\n" +
+                                    $"RAck: {rseqValue} {cseq} INVITE\r\n" +
+                                    $"Max-Forwards: 70\r\n" +
+                                    $"Content-Length: 0\r\n" +
+                                    $"\r\n";
+
+#pragma warning disable CA1848, CA1873
+                                _logger.LogInformation("Sending PRACK for {Status} (RSeq={RSeq})", statusCode, rseqValue);
+#pragma warning restore CA1848, CA1873
+
+                                _ = _wsChannel!.SendAsync(prack);
+                            }
+                        }
+                        else if (statusCode == 200)
+                        {
+                            // 200 OK for INVITE — send ACK
+                            var ack =
+                                $"ACK sip:{resp.Header.Contact[0].ContactURI} SIP/2.0\r\n" +
+                                $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                                $"From: {resp.Header.From}\r\n" +
+                                $"To: {resp.Header.To}\r\n" +
+                                $"Call-ID: {resp.Header.CallId}\r\n" +
+                                $"CSeq: {resp.Header.CSeq} ACK\r\n" +
+                                $"Max-Forwards: 70\r\n" +
+                                $"Content-Length: 0\r\n" +
+                                $"\r\n";
+
+#pragma warning disable CA1848, CA1873
+                            _logger.LogInformation("INVITE 200 OK — sending ACK, call is CONNECTED!");
+#pragma warning restore CA1848, CA1873
+
+                            _ = _wsChannel!.SendAsync(ack);
+                        }
+                    }
                 }
 #pragma warning disable CA1031
                 catch (Exception ex)
