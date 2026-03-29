@@ -3,42 +3,40 @@
              xmlns:vm="using:GvResearch.Softphone.ViewModels"
              x:Class="GvResearch.Softphone.Views.ActiveCallView"
              x:DataType="vm:ActiveCallViewModel">
-    <DockPanel Margin="16">
-        <!-- Mute / Hangup buttons pinned to the bottom -->
-        <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,16,0,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
-                <Button Content="{Binding MuteButtonText}"
-                        Command="{Binding ToggleMuteCommand}"
-                        Width="120" Height="50"
-                        HorizontalContentAlignment="Center"
-                        FontSize="16" />
-                <Button Content="Hangup"
-                        Command="{Binding HangupCommand}"
-                        Width="120" Height="50"
-                        HorizontalContentAlignment="Center"
-                        FontSize="16"
-                        Background="#CC0000" Foreground="White" />
-            </StackPanel>
+    <StackPanel Margin="16" Spacing="0" VerticalAlignment="Bottom">
+        <!-- Remote number -->
+        <TextBlock Text="{Binding RemoteNumber}"
+                   FontSize="28"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,4" />
+
+        <!-- Call status -->
+        <TextBlock Text="{Binding CallStatus}"
+                   FontSize="16"
+                   HorizontalAlignment="Center"
+                   Foreground="#888888"
+                   Margin="0,0,0,8" />
+
+        <!-- Duration timer -->
+        <TextBlock Text="{Binding CallDuration}"
+                   FontSize="20"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,16" />
+
+        <!-- Mute / Hangup buttons -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+            <Button Content="{Binding MuteButtonText}"
+                    Command="{Binding ToggleMuteCommand}"
+                    Width="120" Height="50"
+                    HorizontalContentAlignment="Center"
+                    FontSize="16" />
+            <Button Content="Hangup"
+                    Command="{Binding HangupCommand}"
+                    Width="120" Height="50"
+                    HorizontalContentAlignment="Center"
+                    FontSize="16"
+                    Background="#CC0000" Foreground="White" />
         </StackPanel>
-
-        <!-- Call info centered in remaining space -->
-        <StackPanel Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <!-- Remote number -->
-            <TextBlock Text="{Binding RemoteNumber}"
-                       FontSize="28"
-                       FontWeight="Bold"
-                       HorizontalAlignment="Center" />
-
-            <!-- Call status -->
-            <TextBlock Text="{Binding CallStatus}"
-                       FontSize="16"
-                       HorizontalAlignment="Center"
-                       Foreground="#888888" />
-
-            <!-- Duration timer -->
-            <TextBlock Text="{Binding CallDuration}"
-                       FontSize="20"
-                       HorizontalAlignment="Center" />
-        </StackPanel>
-    </DockPanel>
+    </StackPanel>
 </UserControl>
