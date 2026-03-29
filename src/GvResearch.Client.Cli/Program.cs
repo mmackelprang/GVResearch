@@ -35,34 +35,57 @@ catch
 
 if (!chromeConnected)
 {
-    Console.WriteLine($"Chrome is not running with remote debugging on port {debugPort}.");
-    Console.WriteLine();
-    Console.WriteLine("Please restart Chrome with this command (close Chrome first):");
-    Console.WriteLine();
+    Console.WriteLine("No Chrome with remote debugging found. Launching Chrome automatically...");
 
-    var chromePath = FindChromePath();
-    var profilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Google", "Chrome", "User Data");
-
-    Console.WriteLine($"  \"{chromePath}\" --remote-debugging-port={debugPort} --user-data-dir=\"{profilePath}\"");
-    Console.WriteLine();
-    Console.WriteLine("Or on Windows, from Run (Win+R):");
-    Console.WriteLine($"  chrome --remote-debugging-port={debugPort}");
-    Console.WriteLine();
-    Console.Write("Press Enter once Chrome is running with debugging enabled... ");
-    Console.ReadLine();
-
-    try
+    // Kill any existing Chrome to avoid "Opening in existing session" problem
+    foreach (var proc in Process.GetProcessesByName("chrome"))
     {
-        browser = await playwright.Chromium.ConnectOverCDPAsync($"http://127.0.0.1:{debugPort}").ConfigureAwait(false);
-        Console.WriteLine("Connected!");
-        chromeConnected = true;
+        try { proc.Kill(); } catch { /* best effort */ }
     }
-    catch (PlaywrightException ex)
+    await Task.Delay(2000).ConfigureAwait(false);
+
+    // Launch Chrome with a persistent debug profile (survives across tool runs)
+    var chromePath = FindChromePath();
+    var debugProfilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "GvResearch", "chrome-debug-profile");
+    Directory.CreateDirectory(debugProfilePath);
+
+    Console.WriteLine($"Starting Chrome with debug profile at: {debugProfilePath}");
+    var chromeProcess = Process.Start(new ProcessStartInfo
     {
-        Console.Error.WriteLine($"Failed to connect: {ex.Message.Split('\n')[0]}");
-        Console.Error.WriteLine("Make sure Chrome is running with --remote-debugging-port=9222");
+        FileName = chromePath,
+        Arguments = $"--remote-debugging-port={debugPort} --user-data-dir=\"{debugProfilePath}\" --no-first-run --no-default-browser-check",
+        UseShellExecute = false,
+    });
+
+    if (chromeProcess is null)
+    {
+        Console.Error.WriteLine("Failed to start Chrome.");
+        return 1;
+    }
+
+    // Wait for debug port to be ready
+    Console.Write("Waiting for Chrome debug port");
+    for (int i = 0; i < 30; i++)
+    {
+        await Task.Delay(1000).ConfigureAwait(false);
+        Console.Write(".");
+        try
+        {
+            browser = await playwright.Chromium.ConnectOverCDPAsync($"http://127.0.0.1:{debugPort}").ConfigureAwait(false);
+            chromeConnected = true;
+            Console.WriteLine(" connected!");
+            break;
+        }
+#pragma warning disable CA1031
+        catch { /* not ready yet */ }
+#pragma warning restore CA1031
+    }
+
+    if (!chromeConnected)
+    {
+        Console.Error.WriteLine("\nFailed to connect after 30 seconds.");
         return 1;
     }
 }

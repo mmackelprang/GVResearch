@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <!-- CLI tool: suppress analyzer rules inappropriate for console apps -->
-    <NoWarn>$(NoWarn);CA1515;CA1303;CA1849;CA1869;CA2000</NoWarn>
+    <NoWarn>$(NoWarn);CA1515;CA1303;CA1849;CA1869;CA2000;CA1031</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
