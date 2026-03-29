@@ -1,3 +1,4 @@
+using GvResearch.Shared.Signaler;
 using GvResearch.Shared.Transport;
 using GvResearch.Shared.Services;
 using GvResearch.Softphone.Audio;
@@ -18,27 +19,38 @@ public sealed class GvPhoneClient : IAsyncDisposable
 {
     private readonly IGvClient _client;
     private readonly ICallTransport _transport;
+    private readonly IGvSignalerClient _signaler;
     private readonly AudioEngine _audioEngine;
     private string? _activeCallId;
+    private bool _signalerConnected;
 
     public event EventHandler<StringEventArgs>? StatusChanged;
     public event EventHandler<StringEventArgs>? IncomingCallReceived;
     public event EventHandler? CallAnswered;
     public event EventHandler? CallEnded;
 
-    public GvPhoneClient(IGvClient client, ICallTransport transport, AudioEngine audioEngine)
+    public GvPhoneClient(IGvClient client, ICallTransport transport, IGvSignalerClient signaler, AudioEngine audioEngine)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(transport);
+        ArgumentNullException.ThrowIfNull(signaler);
         ArgumentNullException.ThrowIfNull(audioEngine);
         _client = client;
         _transport = transport;
+        _signaler = signaler;
         _audioEngine = audioEngine;
         _transport.IncomingCallReceived += OnIncomingCall;
     }
 
     public async Task<bool> CallAsync(string destination, CancellationToken ct = default)
     {
+        if (!_signalerConnected)
+        {
+            StatusChanged?.Invoke(this, new StringEventArgs("Connecting signaler..."));
+            await _signaler.ConnectAsync(ct).ConfigureAwait(false);
+            _signalerConnected = true;
+        }
+
         StatusChanged?.Invoke(this, new StringEventArgs($"Calling {destination}..."));
 
         var result = await _client.Calls.InitiateAsync(destination, ct).ConfigureAwait(false);
