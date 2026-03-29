@@ -25,9 +25,15 @@ internal sealed class Program
         var serviceCollection = new ServiceCollection();
         serviceCollection.AddLogging(b => b.AddConsole());
 
-        // Register signaler and transport BEFORE AddGvClient so the NullCallTransport is skipped.
+        // Register signaler for push notifications
         serviceCollection.AddSingleton<IGvSignalerClient, GvSignalerClient>();
-        serviceCollection.AddSingleton<ICallTransport, WebRtcCallTransport>();
+
+        // Register SIP credential provider and SIP-over-WebSocket call transport
+        serviceCollection.AddSingleton<GvSipCredentialProvider>();
+        serviceCollection.AddSingleton<ICallTransport>(sp =>
+            new SipWssCallTransport(
+                sp.GetRequiredService<ILogger<SipWssCallTransport>>(),
+                () => sp.GetRequiredService<GvSipCredentialProvider>().GetCredentialsAsync()));
 
         serviceCollection.AddGvClient(options =>
         {
