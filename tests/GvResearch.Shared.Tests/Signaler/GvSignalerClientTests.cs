@@ -14,8 +14,8 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
     public async Task ConnectAsync_SetsIsConnected()
     {
         var handler = new FakeSignalerHandler();
-        handler.EnqueueResponse(HttpStatusCode.OK, """{"server":"test-server"}""");
-        handler.EnqueueResponse(HttpStatusCode.OK, """[[0,["c","sid-123","",[8]]]]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, """["gsid-test",3,null,"123","456"]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, "51\n" + """[[0,["c","sid-123","",8,14,30000]]]""" + "\n");
         handler.EnqueueLongPollBlock();
 
         using var httpClient = new HttpClient(handler)
@@ -32,8 +32,8 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
     public async Task ConnectAsync_ThenDisconnect_SetsIsConnectedFalse()
     {
         var handler = new FakeSignalerHandler();
-        handler.EnqueueResponse(HttpStatusCode.OK, """{"server":"test-server"}""");
-        handler.EnqueueResponse(HttpStatusCode.OK, """[[0,["c","sid-456","",[8]]]]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, """["gsid-test",3,null,"123","456"]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, "51\n" + """[[0,["c","sid-456","",8,14,30000]]]""" + "\n");
         handler.EnqueueLongPollBlock();
 
         using var httpClient = new HttpClient(handler)
@@ -51,8 +51,8 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
     public async Task PollLoop_FiresEventReceived()
     {
         var handler = new FakeSignalerHandler();
-        handler.EnqueueResponse(HttpStatusCode.OK, """{"server":"s"}""");
-        handler.EnqueueResponse(HttpStatusCode.OK, """[[0,["c","sid-789","",[8]]]]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, """["gsid-s",3,null,"1","2"]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, "51\n" + """[[0,["c","sid-789","",8,14,30000]]]""" + "\n");
         handler.EnqueueResponse(HttpStatusCode.OK,
             """[[1,[["sdp-offer","call-1","v=0\r\n"]]]]""");
         handler.EnqueueLongPollBlock();
@@ -77,8 +77,8 @@ public sealed class GvSignalerClientTests : IAsyncDisposable
     public async Task SendSdpOfferAsync_PostsToChannel()
     {
         var handler = new FakeSignalerHandler();
-        handler.EnqueueResponse(HttpStatusCode.OK, """{"server":"s"}""");
-        handler.EnqueueResponse(HttpStatusCode.OK, """[[0,["c","sid-send","",[8]]]]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, """["gsid-s",3,null,"1","2"]""");
+        handler.EnqueueResponse(HttpStatusCode.OK, "52\n" + """[[0,["c","sid-send","",8,14,30000]]]""" + "\n");
         handler.EnqueueLongPollBlock();
         handler.EnqueueResponse(HttpStatusCode.OK, "");
 
