@@ -329,14 +329,9 @@ public sealed class SipWssCallTransport : ICallTransport
 
                             if (rseqValue is not null && contactUri is not null)
                             {
-                                // Extract just the URI from Contact: <uri>;params
-                                var contactSipUri = contactUri;
-                                if (contactSipUri.StartsWith('<'))
-                                {
-                                    var end = contactSipUri.IndexOf('>', StringComparison.Ordinal);
-                                    if (end > 0)
-                                        contactSipUri = contactSipUri[1..end];
-                                }
+                                // Extract the full SIP URI from Contact: <uri>
+                                // Keep ALL URI params (port, transport, uri-econt)
+                                var contactSipUri = ExtractSipUri(contactUri);
 
                                 // Build PRACK with Record-Route → Route
                                 var prack =
@@ -376,13 +371,7 @@ public sealed class SipWssCallTransport : ICallTransport
                             var callIdValue = ExtractHeaderValue(message, "Call-ID");
                             var recordRoutes = ExtractAllHeaders(message, "Record-Route");
 
-                            var contactSipUri = contactUri ?? $"sip:+19193718044@{SipDomain}";
-                            if (contactSipUri.StartsWith('<'))
-                            {
-                                var end = contactSipUri.IndexOf('>', StringComparison.Ordinal);
-                                if (end > 0)
-                                    contactSipUri = contactSipUri[1..end];
-                            }
+                            var contactSipUri = ExtractSipUri(contactUri ?? $"sip:unknown@{SipDomain}");
 
                             var ack =
                                 $"ACK {contactSipUri} SIP/2.0\r\n" +
@@ -477,6 +466,21 @@ public sealed class SipWssCallTransport : ICallTransport
 
         return msg;
     }
+
+    /// <summary>Extract the SIP URI from a header value like "&lt;sip:...&gt;;params".</summary>
+#pragma warning disable CA1307 // SIP URIs are ASCII — ordinal is implicit
+    private static string ExtractSipUri(string headerValue)
+    {
+        var ltIdx = headerValue.IndexOf('<');
+        if (ltIdx >= 0)
+        {
+            var gtIdx = headerValue.IndexOf('>', ltIdx + 1);
+            if (gtIdx > ltIdx)
+                return headerValue[(ltIdx + 1)..gtIdx];
+        }
+        return headerValue;
+    }
+#pragma warning restore CA1307
 
     /// <summary>Extract the value portion of a SIP header from raw message text.</summary>
     private static string? ExtractHeaderValue(string message, string headerName)
