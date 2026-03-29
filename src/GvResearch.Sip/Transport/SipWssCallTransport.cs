@@ -30,8 +30,7 @@ namespace GvResearch.Sip.Transport;
 public sealed class SipWssCallTransport : ICallTransport
 {
     private const string SipDomain = "web.c.pbx.voice.sip.google.com";
-    private const string SipProxyHost = "216.239.36.145";
-    private const int SipProxyPort = 443;
+    private const string WssUrl = "wss://web.voice.telephony.goog/websocket";
     private const string UserAgent = "GoogleVoice voice.web-frontend_20260318.08_p1";
 
     private static readonly Action<ILogger, Exception?> LogRegistering =
@@ -219,17 +218,25 @@ public sealed class SipWssCallTransport : ICallTransport
         // Connect to Google's SIP proxy via our custom WebSocket channel
         // (bypasses SSL cert name mismatch for raw IP connection)
         _wsChannel = new GvSipWebSocketChannel(
-            new Uri($"wss://{SipProxyHost}:{SipProxyPort}"),
+            new Uri(WssUrl),
             _logger);
 
         var regTcs = new TaskCompletionSource<bool>();
+
+        // These are shared between the event handler and the REGISTER below
+        var regCallId = Guid.NewGuid().ToString("N")[..22];
+        var regTag = CallProperties.CreateNewTag();
+        var regWsHost = string.Concat(Guid.NewGuid().ToString("N").AsSpan(0, 12), ".invalid");
+        var regContactUser = Guid.NewGuid().ToString("N")[..8];
+        var regDeviceUuid = Guid.NewGuid().ToString("D");
 
         // Listen for SIP responses on the WebSocket
         _wsChannel.MessageReceived += (sender, args) =>
         {
             var message = args.Message;
-#pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
-            _logger.LogInformation("SIP received:\n{Message}", message[..Math.Min(500, message.Length)]);
+#pragma warning disable CA1848, CA1873
+            _logger.LogInformation("SIP received ({Length} chars):\n{Message}",
+                message.Length, message[..Math.Min(800, message.Length)]);
 #pragma warning restore CA1848, CA1873
 
             if (message.StartsWith("SIP/2.0", StringComparison.Ordinal))
@@ -245,6 +252,43 @@ public sealed class SipWssCallTransport : ICallTransport
                             _registered = true;
                             regTcs.TrySetResult(true);
                         }
+                        else if ((int)resp.Status == 401)
+                        {
+                            // 401 challenge — extract nonce and resend with Digest auth
+#pragma warning disable CA1848, CA1873
+                            _logger.LogInformation("Got 401 challenge, computing Digest auth...");
+#pragma warning restore CA1848, CA1873
+                            var authHeader = resp.Header.AuthenticationHeaders.FirstOrDefault();
+                            if (authHeader is not null)
+                            {
+                                var nonce = authHeader.SIPDigest.Nonce;
+                                var realm = authHeader.SIPDigest.Realm;
+
+                                // Compute MD5 Digest response
+                                // HA1 = MD5(username:realm:password)
+                                // HA2 = MD5(REGISTER:sip:domain)
+                                // response = MD5(HA1:nonce:HA2)
+                                var username = creds.SipUsername;
+                                var password = creds.BearerToken; // Token used as password for Digest
+                                var uri = $"sip:{SipDomain}";
+
+                                var ha1 = Md5Hash($"{username}:{realm}:{password}");
+                                var ha2 = Md5Hash($"REGISTER:{uri}");
+                                var digestResponse = Md5Hash($"{ha1}:{nonce}:{ha2}");
+
+                                var authLine = $"Authorization: Digest algorithm=MD5, username=\"{username}\", " +
+                                    $"realm=\"{realm}\", nonce=\"{nonce}\", uri=\"{uri}\", response=\"{digestResponse}\"";
+
+                                var reg2 = BuildRegister(username, regCallId, regTag, regWsHost, regContactUser,
+                                    regDeviceUuid, 2, authLine);
+
+#pragma warning disable CA1848, CA1873
+                                _logger.LogInformation("Sending SIP REGISTER with Digest auth...");
+#pragma warning restore CA1848, CA1873
+
+                                _ = _wsChannel!.SendAsync(reg2);
+                            }
+                        }
                         else
                         {
                             LogError(_logger, $"REGISTER failed: {(int)resp.Status} {resp.ReasonPhrase}", null);
@@ -255,7 +299,7 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning disable CA1031
                 catch (Exception ex)
                 {
-#pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
+#pragma warning disable CA1848, CA1873
                     _logger.LogWarning(ex, "Failed to parse SIP response");
 #pragma warning restore CA1848, CA1873
                 }
@@ -268,36 +312,17 @@ public sealed class SipWssCallTransport : ICallTransport
         // Store credentials for INVITE
         _credentials = creds;
 
-        // Build REGISTER request
-        var fromUri = SIPURI.ParseSIPURI($"sip:{creds.SipUsername}@{SipDomain}");
-        var callId = Guid.NewGuid().ToString();
-        var branch = CallProperties.CreateBranchId();
-        var tag = CallProperties.CreateNewTag();
+        // Step 1: Send REGISTER without auth (will get 401 challenge)
+        var reg1 = BuildRegister(creds.SipUsername, regCallId, regTag, regWsHost, regContactUser,
+            regDeviceUuid, 1, authHeader: null);
 
-        // SIP messages are ASCII protocol text; invariant culture is correct here.
-#pragma warning disable CA1305
-        var register = new StringBuilder();
-        register.AppendLine($"REGISTER sip:{SipDomain} SIP/2.0");
-        register.AppendLine($"Via: SIP/2.0/wss {Guid.NewGuid():N}.invalid;branch={branch};keep");
-        register.AppendLine($"To: <sip:{creds.SipUsername}@{SipDomain}>");
-        register.AppendLine($"From: <sip:{creds.SipUsername}@{SipDomain}>;tag={tag}");
-        register.AppendLine($"Call-ID: {callId}");
-        register.AppendLine($"CSeq: 1 REGISTER");
-        register.AppendLine($"Contact: <sip:{creds.SipUsername}@{Guid.NewGuid():N}.invalid;transport=wss>");
-        register.AppendLine($"Expires: 600");
-        register.AppendLine($"Authorization: Bearer token=\"{creds.BearerToken}\", username=\"{creds.PhoneNumber}\", realm=\"{SipDomain}\"");
-        register.AppendLine($"User-Agent: {UserAgent}");
-        register.AppendLine($"Max-Forwards: 70");
-        register.AppendLine($"Content-Length: 0");
-        register.AppendLine(); // empty line terminates headers
-#pragma warning restore CA1305
-
-#pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
-        _logger.LogInformation("Sending SIP REGISTER:\n{Register}", register.ToString()[..Math.Min(500, register.Length)]);
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("Sending SIP REGISTER (no auth)...");
 #pragma warning restore CA1848, CA1873
 
-        await _wsChannel.SendAsync(register.ToString(), ct).ConfigureAwait(false);
+        await _wsChannel.SendAsync(reg1, ct).ConfigureAwait(false);
 
+        // Wait for 401 or 200
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
@@ -306,6 +331,41 @@ public sealed class SipWssCallTransport : ICallTransport
         {
             throw new InvalidOperationException("SIP REGISTER failed");
         }
+    }
+
+    private static string BuildRegister(string sipUsername, string callId, string tag,
+        string wsHost, string contactUser, string deviceUuid, int cseq, string? authHeader)
+    {
+#pragma warning disable CA1305 // SIP is ASCII protocol text
+        var sb = new StringBuilder();
+        sb.AppendLine($"REGISTER sip:{SipDomain} SIP/2.0");
+        sb.AppendLine($"Via: SIP/2.0/wss {wsHost};branch={CallProperties.CreateBranchId()};keep");
+        sb.AppendLine($"Max-Forwards: 69");
+        sb.AppendLine($"To: <sip:{sipUsername}@{SipDomain}>");
+        sb.AppendLine($"From: <sip:{sipUsername}@{SipDomain}>;tag={tag}");
+        sb.AppendLine($"Call-ID: {callId}");
+        sb.AppendLine($"CSeq: {cseq} REGISTER");
+        if (authHeader is not null)
+            sb.AppendLine(authHeader);
+        sb.AppendLine($"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w");
+        sb.AppendLine($"Contact: <sip:{contactUser}@{wsHost};transport=wss>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:{deviceUuid}>\";expires=3600");
+        sb.AppendLine($"Expires: 3600");
+        sb.AppendLine($"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK");
+        sb.AppendLine($"Supported: path,gruu,outbound,record-aware");
+        sb.AppendLine($"User-Agent: {UserAgent}");
+        sb.AppendLine($"Content-Length: 0");
+        sb.AppendLine();
+#pragma warning restore CA1305
+        return sb.ToString();
+    }
+
+    private static string Md5Hash(string input)
+    {
+#pragma warning disable CA5351 // MD5 required by SIP Digest authentication (RFC 2617)
+        var hash = System.Security.Cryptography.MD5.HashData(
+            Encoding.UTF8.GetBytes(input));
+#pragma warning restore CA5351
+        return Convert.ToHexStringLower(hash);
     }
 
     public async ValueTask DisposeAsync()

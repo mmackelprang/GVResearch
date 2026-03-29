@@ -42,21 +42,9 @@ public sealed class GvSipWebSocketChannel : IDisposable
     {
         _ws = new ClientWebSocket();
         _ws.Options.AddSubProtocol("sip");
-
-        // When passing an HttpMessageInvoker, all SSL/cert options must be on the
-        // handler — NOT on ClientWebSocketOptions. Google's SIP proxy at 216.239.36.145
-        // serves a cert for "telephony.goog" so we set SNI + bypass validation.
-#pragma warning disable CA5359, CA2000
-        var handler = new SocketsHttpHandler
-        {
-            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
-            {
-                RemoteCertificateValidationCallback = static (_, _, _, _) => true,
-                TargetHost = "telephony.goog",
-            },
-        };
-#pragma warning restore CA5359, CA2000
-        using var invoker = new HttpMessageInvoker(handler);
+        _ws.Options.SetRequestHeader("Origin", "https://voice.google.com");
+        _ws.Options.SetRequestHeader("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
 
 #pragma warning disable CA1848, CA1873 // Debug/UAT tool
         _logger.LogInformation("Connecting WebSocket to {Uri}...", _serverUri);
@@ -65,7 +53,7 @@ public sealed class GvSipWebSocketChannel : IDisposable
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
-        await _ws.ConnectAsync(new Uri(_serverUri), invoker, timeoutCts.Token).ConfigureAwait(false);
+        await _ws.ConnectAsync(new Uri(_serverUri), timeoutCts.Token).ConfigureAwait(false);
 
 #pragma warning disable CA1848, CA1873
         _logger.LogInformation("WebSocket connected! State={State}", _ws.State);
