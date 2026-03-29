@@ -1,8 +1,9 @@
 # Google Voice Internal API Reference
 
-**Date:** 2026-03-27
-**Method:** Playwright MCP browser interception + WebRTC monkey-patching
-**Sessions:** 5 capture sessions, 56 total requests, 20 unique endpoints
+**Date:** 2026-03-27 (updated 2026-03-29)
+**Method:** Playwright MCP browser interception + WebRTC monkey-patching + CDP Fetch interception
+**Sessions:** 5 Playwright sessions (56 requests) + 1 CDP session (26 requests, 45 cookies)
+**Total unique endpoints:** 23
 
 ---
 
