@@ -244,8 +244,19 @@ if (captureSignaler)
         }
     };
 
-    // Reload to trigger signaler connection
-    await page.ReloadAsync(new PageReloadOptions { WaitUntil = WaitUntilState.NetworkIdle }).ConfigureAwait(false);
+    // Reload to trigger signaler connection (don't wait for networkidle — signaler long-poll never settles)
+    try
+    {
+        await page.ReloadAsync(new PageReloadOptions
+        {
+            WaitUntil = WaitUntilState.DOMContentLoaded,
+            Timeout = 15_000,
+        }).ConfigureAwait(false);
+    }
+    catch (TimeoutException)
+    {
+        // Expected — signaler keeps connection open
+    }
     Console.WriteLine("Waiting 15 seconds for signaler traffic...");
     await Task.Delay(15_000).ConfigureAwait(false);
 
