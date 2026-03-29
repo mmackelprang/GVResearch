@@ -87,13 +87,20 @@ public sealed class GvSipWebSocketChannel : IDisposable
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-#pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
-                    _logger.LogInformation("WebSocket closed by server");
+#pragma warning disable CA1848, CA1873
+                    _logger.LogInformation("WebSocket closed by server: {Status} {Desc}",
+                        _ws.CloseStatus, _ws.CloseStatusDescription);
 #pragma warning restore CA1848, CA1873
                     break;
                 }
 
-                if (result.MessageType == WebSocketMessageType.Text)
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("WebSocket received: type={Type} count={Count} endOfMessage={End}",
+                    result.MessageType, result.Count, result.EndOfMessage);
+#pragma warning restore CA1848, CA1873
+
+                if (result.MessageType == WebSocketMessageType.Text ||
+                    result.MessageType == WebSocketMessageType.Binary)
                 {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     MessageReceived?.Invoke(this, new SipMessageEventArgs(message));
