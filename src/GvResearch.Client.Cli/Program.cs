@@ -81,14 +81,23 @@ await page.GotoAsync("https://voice.google.com", new PageGotoOptions
     Timeout = 120_000,
 }).ConfigureAwait(false);
 
-// Check if we need to log in
+// Check if we need to log in (workspace.google.com = marketing page = not logged in)
 var url = page.Url;
 if (url.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
-    url.Contains("signin", StringComparison.OrdinalIgnoreCase))
+    url.Contains("signin", StringComparison.OrdinalIgnoreCase) ||
+    url.Contains("workspace.google.com", StringComparison.OrdinalIgnoreCase) ||
+    !url.Contains("voice.google.com", StringComparison.OrdinalIgnoreCase))
 {
     Console.WriteLine();
     Console.WriteLine("You need to log in to Google. Complete the login in the browser window.");
     Console.WriteLine("Waiting for voice.google.com to load (timeout: 120s)...");
+
+    // Navigate to the actual login flow if we ended up on a marketing page
+    if (!url.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase))
+    {
+        await page.GotoAsync("https://accounts.google.com/ServiceLogin?continue=https://voice.google.com",
+            new PageGotoOptions { Timeout = 30_000 }).ConfigureAwait(false);
+    }
 
     await page.WaitForURLAsync("**/voice.google.com/**", new PageWaitForURLOptions
     {
