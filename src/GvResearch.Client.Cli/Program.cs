@@ -22,7 +22,7 @@ using var playwright = await Playwright.CreateAsync().ConfigureAwait(false);
 
 try
 {
-    browser = await playwright.Chromium.ConnectOverCDPAsync($"http://localhost:{debugPort}").ConfigureAwait(false);
+    browser = await playwright.Chromium.ConnectOverCDPAsync($"http://127.0.0.1:{debugPort}").ConfigureAwait(false);
     Console.WriteLine($"Connected to Chrome on port {debugPort}.");
     chromeConnected = true;
 }
@@ -55,7 +55,7 @@ if (!chromeConnected)
 
     try
     {
-        browser = await playwright.Chromium.ConnectOverCDPAsync($"http://localhost:{debugPort}").ConfigureAwait(false);
+        browser = await playwright.Chromium.ConnectOverCDPAsync($"http://127.0.0.1:{debugPort}").ConfigureAwait(false);
         Console.WriteLine("Connected!");
         chromeConnected = true;
     }
