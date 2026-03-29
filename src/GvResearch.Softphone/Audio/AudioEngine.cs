@@ -1,57 +1,58 @@
-using System.Net;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
-using SIPSorcery.Net;
+using GvResearch.Shared.Transport;
 
 namespace GvResearch.Softphone.Audio;
 
 /// <summary>
-/// NAudio-based audio engine that wires microphone input into an RTP session
-/// and plays back received RTP audio through the speaker.
+/// NAudio-based audio engine that wires microphone input to the call transport
+/// and plays back received audio through the speaker.
+/// Handles sample rate conversion between the transport (48kHz for Opus)
+/// and the local audio devices.
 /// </summary>
 public sealed class AudioEngine : IDisposable
 {
-    private const int SampleRate = 8000;
+    // G.711 codec uses 8kHz; the transport delivers 8kHz PCM
+    private const int DeviceSampleRate = 8000;
     private const int Channels = 1;
     private const int BitsPerSample = 16;
 
-    private static readonly Action<ILogger, int, int, int, Exception?> LogStarted =
-        LoggerMessage.Define<int, int, int>(LogLevel.Information, new EventId(1, "AudioStarted"),
-            "Audio engine started: {SampleRate}Hz {Channels}ch {Bits}bit.");
+    private static readonly Action<ILogger, int, Exception?> LogStarted =
+        LoggerMessage.Define<int>(LogLevel.Information, new EventId(1, "AudioStarted"),
+            "Audio engine started at {SampleRate}Hz.");
 
     private static readonly Action<ILogger, Exception?> LogStopped =
         LoggerMessage.Define(LogLevel.Information, new EventId(2, "AudioStopped"),
             "Audio engine stopped.");
 
-    private static readonly Action<ILogger, bool, Exception?> LogMuted =
-        LoggerMessage.Define<bool>(LogLevel.Information, new EventId(3, "AudioMuted"),
-            "Audio mute set to {Muted}.");
-
     private readonly ILogger<AudioEngine> _logger;
+    private readonly ICallTransport _transport;
     private WaveInEvent? _waveIn;
     private WaveOutEvent? _waveOut;
     private BufferedWaveProvider? _waveProvider;
-    private RTPSession? _rtpSession;
+    private string? _activeCallId;
     private bool _disposed;
     private bool _isMuted;
 
-    public AudioEngine(ILogger<AudioEngine> logger)
+    public AudioEngine(ILogger<AudioEngine> logger, ICallTransport transport)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(transport);
         _logger = logger;
+        _transport = transport;
     }
 
-    /// <summary>Starts audio capture and playback using the given RTP session.</summary>
-    public void Start(RTPSession rtpSession)
+    /// <summary>Starts audio capture and playback for the given call.</summary>
+    public void Start(string callId)
     {
-        ArgumentNullException.ThrowIfNull(rtpSession);
+        ArgumentException.ThrowIfNullOrWhiteSpace(callId);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _rtpSession = rtpSession;
+        _activeCallId = callId;
 
-        var waveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels);
+        var waveFormat = new WaveFormat(DeviceSampleRate, BitsPerSample, Channels);
 
-        // Set up microphone capture
+        // Microphone capture
         _waveIn = new WaveInEvent
         {
             WaveFormat = waveFormat,
@@ -60,26 +61,27 @@ public sealed class AudioEngine : IDisposable
         _waveIn.DataAvailable += OnMicDataAvailable;
         _waveIn.StartRecording();
 
-        // Set up speaker playback
+        // Speaker playback
         _waveProvider = new BufferedWaveProvider(waveFormat)
         {
             BufferDuration = TimeSpan.FromSeconds(1),
             DiscardOnBufferOverflow = true
         };
-
         _waveOut = new WaveOutEvent();
         _waveOut.Init(_waveProvider);
         _waveOut.Play();
 
-        // Receive RTP audio packets
-        rtpSession.OnRtpPacketReceived += OnRtpPacketReceived;
+        // Subscribe to transport audio
+        _transport.AudioReceived += OnAudioReceived;
 
-        LogStarted(_logger, SampleRate, Channels, BitsPerSample, null);
+        LogStarted(_logger, DeviceSampleRate, null);
     }
 
     /// <summary>Stops audio capture and playback.</summary>
     public void Stop()
     {
+        _transport.AudioReceived -= OnAudioReceived;
+
         if (_waveIn is not null)
         {
             _waveIn.StopRecording();
@@ -95,49 +97,38 @@ public sealed class AudioEngine : IDisposable
             _waveOut = null;
         }
 
-        if (_rtpSession is not null)
-        {
-            _rtpSession.OnRtpPacketReceived -= OnRtpPacketReceived;
-            _rtpSession = null;
-        }
+        _waveProvider = null;
+        _activeCallId = null;
 
         LogStopped(_logger, null);
     }
 
-    /// <summary>Sets microphone mute state. When muted captured audio is not sent via RTP.</summary>
-    public void SetMute(bool muted)
-    {
-        _isMuted = muted;
-        LogMuted(_logger, muted, null);
-    }
+    /// <summary>Sets microphone mute state.</summary>
+    public void SetMute(bool muted) => _isMuted = muted;
 
     private void OnMicDataAvailable(object? sender, WaveInEventArgs e)
     {
-        if (_isMuted || _rtpSession is null)
-        {
+        if (_isMuted || _activeCallId is null)
             return;
-        }
 
-        // G.711 encoding would happen here before sending via RTP.
-        // Stub: send raw PCM samples as-is.
-        _rtpSession.SendAudio(
-            (uint)(e.BytesRecorded / 2),
-            e.Buffer[..e.BytesRecorded]);
+        // Send PCM directly to transport — it handles encoding
+        var pcm = new byte[e.BytesRecorded];
+        Buffer.BlockCopy(e.Buffer, 0, pcm, 0, e.BytesRecorded);
+        _transport.SendAudio(_activeCallId, pcm, DeviceSampleRate);
     }
 
-    private void OnRtpPacketReceived(IPEndPoint remoteEndPoint, SDPMediaTypesEnum mediaType, RTPPacket packet)
+    private void OnAudioReceived(object? sender, AudioDataEventArgs args)
     {
-        if (mediaType != SDPMediaTypesEnum.audio || _waveProvider is null)
-        {
+        if (_waveProvider is null || args.CallId != _activeCallId)
             return;
-        }
 
-        // G.711 decoding would happen here.
-        // Stub: write the raw payload bytes directly to the wave provider.
-        _waveProvider.AddSamples(packet.Payload, 0, packet.Payload.Length);
+        // Write decoded PCM to speaker buffer
+        var data = args.PcmData.Span;
+        var buffer = new byte[data.Length];
+        data.CopyTo(buffer);
+        _waveProvider.AddSamples(buffer, 0, buffer.Length);
     }
 
-    /// <inheritdoc />
     public void Dispose()
     {
         if (!_disposed)

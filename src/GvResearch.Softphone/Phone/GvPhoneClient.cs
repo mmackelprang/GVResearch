@@ -1,5 +1,6 @@
 using GvResearch.Shared.Transport;
 using GvResearch.Shared.Services;
+using GvResearch.Softphone.Audio;
 
 namespace GvResearch.Softphone.Phone;
 
@@ -17,6 +18,7 @@ public sealed class GvPhoneClient : IAsyncDisposable
 {
     private readonly IGvClient _client;
     private readonly ICallTransport _transport;
+    private readonly AudioEngine _audioEngine;
     private string? _activeCallId;
 
     public event EventHandler<StringEventArgs>? StatusChanged;
@@ -24,12 +26,14 @@ public sealed class GvPhoneClient : IAsyncDisposable
     public event EventHandler? CallAnswered;
     public event EventHandler? CallEnded;
 
-    public GvPhoneClient(IGvClient client, ICallTransport transport)
+    public GvPhoneClient(IGvClient client, ICallTransport transport, AudioEngine audioEngine)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(transport);
+        ArgumentNullException.ThrowIfNull(audioEngine);
         _client = client;
         _transport = transport;
+        _audioEngine = audioEngine;
         _transport.IncomingCallReceived += OnIncomingCall;
     }
 
@@ -46,6 +50,7 @@ public sealed class GvPhoneClient : IAsyncDisposable
 
         _activeCallId = result.CallId;
         StatusChanged?.Invoke(this, new StringEventArgs("Ringing..."));
+        _audioEngine.Start(result.CallId);
         CallAnswered?.Invoke(this, EventArgs.Empty);
         return true;
     }
@@ -54,6 +59,7 @@ public sealed class GvPhoneClient : IAsyncDisposable
     {
         if (_activeCallId is null) return;
 
+        _audioEngine.Stop();
         await _client.Calls.HangupAsync(_activeCallId, ct).ConfigureAwait(false);
         _activeCallId = null;
         StatusChanged?.Invoke(this, new StringEventArgs("Call ended"));
@@ -65,6 +71,7 @@ public sealed class GvPhoneClient : IAsyncDisposable
     private void OnIncomingCall(object? sender, IncomingCallEventArgs args)
     {
         _activeCallId = args.CallInfo.CallId;
+        _audioEngine.Start(args.CallInfo.CallId);
         IncomingCallReceived?.Invoke(this, new StringEventArgs(args.CallInfo.CallerNumber));
         StatusChanged?.Invoke(this, new StringEventArgs($"Incoming call from {args.CallInfo.CallerNumber}"));
         CallAnswered?.Invoke(this, EventArgs.Empty);

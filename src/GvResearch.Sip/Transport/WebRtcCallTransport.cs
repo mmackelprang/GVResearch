@@ -43,6 +43,7 @@ public sealed class WebRtcCallTransport : ICallTransport
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pendingAnswers = new();
 
     public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived;
+    public event EventHandler<AudioDataEventArgs>? AudioReceived;
 
     public WebRtcCallTransport(IGvSignalerClient signaler, ILogger<WebRtcCallTransport> logger)
     {
@@ -58,6 +59,7 @@ public sealed class WebRtcCallTransport : ICallTransport
         var callId = $"out-{Guid.NewGuid():N}";
         LogInitiating(_logger, callId, toNumber, null);
         var session = new WebRtcCallSession(callId);
+        WireSessionAudio(session);
         _activeCalls[callId] = session;
 
         try
@@ -121,6 +123,14 @@ public sealed class WebRtcCallTransport : ICallTransport
         return Task.FromResult(new TransportCallStatus(callId, status));
     }
 
+    public void SendAudio(string callId, ReadOnlyMemory<byte> pcmData, int sampleRate)
+    {
+        if (_activeCalls.TryGetValue(callId, out var session))
+        {
+            session.SendPcmAudio(pcmData.ToArray(), sampleRate);
+        }
+    }
+
     public async Task HangupAsync(string callId, CancellationToken ct = default)
     {
         LogHangingUp(_logger, callId, null);
@@ -177,6 +187,7 @@ public sealed class WebRtcCallTransport : ICallTransport
     {
         LogIncoming(_logger, offer.CallId, null);
         var session = new WebRtcCallSession(offer.CallId);
+        WireSessionAudio(session);
         _activeCalls[offer.CallId] = session;
 
         try
@@ -230,6 +241,14 @@ public sealed class WebRtcCallTransport : ICallTransport
         {
             // Renegotiation failure is non-fatal
         }
+    }
+
+    private void WireSessionAudio(WebRtcCallSession session)
+    {
+        session.PcmAudioReceived += (pcmData, sampleRate) =>
+        {
+            AudioReceived?.Invoke(this, new AudioDataEventArgs(session.CallId, pcmData, sampleRate));
+        };
     }
 
     private void HandleSdpAnswer(SdpAnswerEvent answer)

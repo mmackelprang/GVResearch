@@ -36,6 +36,7 @@ internal sealed class Program
             options.ApiKey = config["GvResearch:ApiKey"] ?? string.Empty;
         });
 
+        serviceCollection.AddSingleton<Audio.AudioEngine>();
         serviceCollection.AddSingleton<GvPhoneClient>();
 
         Services = serviceCollection.BuildServiceProvider();

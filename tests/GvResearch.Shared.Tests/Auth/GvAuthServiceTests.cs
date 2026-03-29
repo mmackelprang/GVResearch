@@ -32,7 +32,11 @@ public sealed class GvAuthServiceTests
             var result = sut.ComputeSapisidHash("test-sapisid", "https://voice.google.com");
 
             result.Should().StartWith("SAPISIDHASH ");
-            var parts = result["SAPISIDHASH ".Length..].Split('_');
+            // Triple auth: "SAPISIDHASH ts_hash SAPISID1PHASH ts_hash SAPISID3PHASH ts_hash"
+            result.Should().Contain("SAPISID1PHASH ");
+            result.Should().Contain("SAPISID3PHASH ");
+            var firstHash = result.Split(' ')[1]; // "ts_hash"
+            var parts = firstHash.Split('_');
             parts.Should().HaveCount(2);
             long.TryParse(parts[0], out _).Should().BeTrue("timestamp should be numeric");
             parts[1].Should().HaveLength(40, "SHA1 hex digest is 40 chars");
@@ -68,10 +72,11 @@ public sealed class GvAuthServiceTests
 
             var result = sut.ComputeSapisidHash("abc123", "https://voice.google.com");
 
-            var payload = result["SAPISIDHASH ".Length..];
-            var underscore = payload.IndexOf('_', StringComparison.Ordinal);
-            var timestamp = payload[..underscore];
-            var hash = payload[(underscore + 1)..];
+            // Extract first hash from triple: "SAPISIDHASH ts_hash SAPISID1PHASH ..."
+            var firstHash = result.Split(' ')[1]; // "ts_hash"
+            var underscore = firstHash.IndexOf('_', StringComparison.Ordinal);
+            var timestamp = firstHash[..underscore];
+            var hash = firstHash[(underscore + 1)..];
 
             var input = $"{timestamp} abc123 https://voice.google.com";
 #pragma warning disable CA5350 // SHA1 is required by the Google SAPISIDHASH spec

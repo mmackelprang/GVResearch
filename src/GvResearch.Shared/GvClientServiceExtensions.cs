@@ -94,6 +94,12 @@ internal sealed class NullCallTransport : ICallTransport
         remove { }
     }
 
+    public event EventHandler<AudioDataEventArgs>? AudioReceived
+    {
+        add { }
+        remove { }
+    }
+
     public Task<TransportCallResult> InitiateAsync(string toNumber, CancellationToken ct) =>
         throw new NotImplementedException("No call transport configured. Register an ICallTransport implementation.");
 
@@ -101,6 +107,9 @@ internal sealed class NullCallTransport : ICallTransport
         throw new NotImplementedException("No call transport configured.");
 
     public Task HangupAsync(string callId, CancellationToken ct) =>
+        throw new NotImplementedException("No call transport configured.");
+
+    public void SendAudio(string callId, ReadOnlyMemory<byte> pcmData, int sampleRate) =>
         throw new NotImplementedException("No call transport configured.");
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
