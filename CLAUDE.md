@@ -41,10 +41,12 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 - Auth encryption (`TokenEncryption.cs`) encrypts/decrypts the full cookie set (AES-256)
 
 ### What Still Needs to Be Built
-1. **`SipCallTransport`** — `ICallTransport` implementation using SIPSorcery + `sipregisterinfo/get`
-2. **`LoginInteractiveAsync()`** — Playwright-based one-time browser login to populate cookies
+1. **Automated cookie retrieval** — Playwright-based tool to open Chrome, login to Google, extract ALL cookies (including SIDCC, __Secure-*PSIDTS, NID, etc.), encrypt to disk. Should support: (a) one-time interactive login, (b) headless refresh when cookies near expiry, (c) CLI command (`dotnet run -- extract-cookies`) for easy use
+2. **`LoginInteractiveAsync()`** — Integrate cookie extraction into `GvAuthService` so it auto-triggers on 401
 3. **`TryRefreshSessionAsync()`** — Health check via `threadinginfo/get` + cookie refresh cascade
-4. **Voicemail service** — List, play (signed URL), delete, transcription access
+4. **`SipCallTransport`** — `ICallTransport` implementation using SIPSorcery + `sipregisterinfo/get`
+5. **Voicemail service** — List, play (signed URL), delete, transcription access
+6. **Opus codec support** — Replace G.711 fallback with native Opus for better audio quality (requires native lib or managed Opus decoder)
 
 ## Coding Conventions
 
