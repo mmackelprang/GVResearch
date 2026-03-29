@@ -59,6 +59,9 @@ public sealed class SipWssCallTransport : ICallTransport
 
     private GvSipWebSocketChannel? _wsChannel;
     private SipCredentials? _credentials;
+    private string? _serviceRoute; // From REGISTER 200 OK Service-Route header
+    private string? _regContactUser;
+    private string? _regWsHost;
     private bool _registered;
 
     // IncomingCallReceived is never raised by this transport (GV SIP is outbound-only);
@@ -131,37 +134,34 @@ public sealed class SipWssCallTransport : ICallTransport
             var offer = pc.createOffer();
             await pc.setLocalDescription(offer).ConfigureAwait(false);
 
-            // Build SIP INVITE with SDP
-            var branch = CallProperties.CreateBranchId();
-            var tag = CallProperties.CreateNewTag();
-            var wsHost = $"{Guid.NewGuid():N}.invalid";
+            // Build SIP INVITE matching captured format
+            var invTag = CallProperties.CreateNewTag();
+            var sipUsernameEncoded = Uri.EscapeDataString(_credentials.SipUsername);
 
-            // SIP messages are ASCII protocol text; invariant culture is correct here.
-#pragma warning disable CA1305
-            var invite = new StringBuilder();
-            invite.AppendLine($"INVITE sip:{destNumber}@{SipDomain} SIP/2.0");
-            invite.AppendLine($"Via: SIP/2.0/wss {wsHost};branch={branch};keep");
-            invite.AppendLine($"From: <sip:{_credentials.SipUsername}@{SipDomain}>;tag={tag}");
-            invite.AppendLine($"To: <sip:{destNumber}@{SipDomain}>");
-            invite.AppendLine($"Call-ID: {callId}");
-            invite.AppendLine($"CSeq: 1 INVITE");
-            invite.AppendLine($"Contact: <sip:{Guid.NewGuid():N}@{wsHost};transport=wss>");
-            invite.AppendLine($"Content-Type: application/sdp");
-            invite.AppendLine($"Session-Expires: 90");
-            invite.AppendLine($"Supported: timer,100rel,ice,replaces,outbound");
-            invite.AppendLine($"User-Agent: {UserAgent}");
-            invite.AppendLine($"Authorization: Bearer token=\"{_credentials.BearerToken}\", username=\"{_credentials.PhoneNumber}\", realm=\"{SipDomain}\"");
-            invite.AppendLine($"Max-Forwards: 70");
-            invite.AppendLine($"Content-Length: {offer.sdp.Length}");
-            invite.AppendLine(); // empty line
-#pragma warning restore CA1305
-            invite.Append(offer.sdp); // SDP body
+            var inviteMsg =
+                $"INVITE sip:{destNumber}@{SipDomain} SIP/2.0\r\n" +
+                $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                $"From: <sip:{sipUsernameEncoded}@{SipDomain}>;tag={invTag}\r\n" +
+                $"To: <sip:{destNumber}@{SipDomain}>\r\n" +
+                $"Call-ID: {callId}\r\n" +
+                $"CSeq: 1 INVITE\r\n" +
+                $"Contact: <sip:{_regContactUser}@{_regWsHost};transport=wss>\r\n" +
+                $"Content-Type: application/sdp\r\n" +
+                $"Session-Expires: 90\r\n" +
+                $"Supported: timer,100rel,ice,replaces,outbound,record-aware\r\n" +
+                $"User-Agent: {UserAgent}\r\n" +
+                $"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w\r\n" +
+                (_serviceRoute is not null ? $"Route: {_serviceRoute}\r\n" : "") +
+                $"Max-Forwards: 70\r\n" +
+                $"Content-Length: {offer.sdp.Length}\r\n" +
+                $"\r\n" +
+                offer.sdp;
 
 #pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
             _logger.LogInformation("Sending SIP INVITE to {Number}, SDP={SdpLen} chars", destNumber, offer.sdp.Length);
 #pragma warning restore CA1848, CA1873
 
-            await _wsChannel.SendAsync(invite.ToString(), ct).ConfigureAwait(false);
+            await _wsChannel.SendAsync(inviteMsg, ct).ConfigureAwait(false);
 
             // The WebSocket receive loop will log the response
             // For now, return success (we'll add proper response handling later)
@@ -250,6 +250,15 @@ public sealed class SipWssCallTransport : ICallTransport
                         {
                             LogRegistered(_logger, null);
                             _registered = true;
+
+                            // Extract Service-Route for INVITE routing
+                            var srIdx = message.IndexOf("Service-Route:", StringComparison.OrdinalIgnoreCase);
+                            if (srIdx >= 0)
+                            {
+                                var srEnd = message.IndexOf("\r\n", srIdx, StringComparison.Ordinal);
+                                _serviceRoute = message[(srIdx + 15)..srEnd].Trim();
+                            }
+
                             regTcs.TrySetResult(true);
                         }
                         else if ((int)resp.Status == 401)
@@ -315,6 +324,10 @@ public sealed class SipWssCallTransport : ICallTransport
 
         // Store credentials for INVITE
         _credentials = creds;
+
+        // Store for INVITE Contact header
+        _regContactUser = regContactUser;
+        _regWsHost = regWsHost;
 
         // Step 1: Send REGISTER without auth (will get 401 challenge)
         var reg1 = BuildRegister(creds.SipUsername, regCallId, regTag, regWsHost, regContactUser,
