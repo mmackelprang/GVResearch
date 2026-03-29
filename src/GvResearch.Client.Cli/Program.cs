@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using GvResearch.Shared.Auth;
@@ -6,185 +7,216 @@ using Microsoft.Playwright;
 var captureSignaler = args.Contains("--capture-signaler", StringComparer.OrdinalIgnoreCase);
 var outputDir = args.FirstOrDefault(a => a.StartsWith("--output=", StringComparison.OrdinalIgnoreCase))
     ?["--output=".Length..] ?? Directory.GetCurrentDirectory();
+var debugPort = 9222;
 
 Console.WriteLine("GV Cookie Extractor");
 Console.WriteLine("===================");
+Console.WriteLine();
 
-// Install Playwright browsers if needed
-Console.WriteLine("Checking Playwright browsers...");
-var exitCode = Microsoft.Playwright.Program.Main(["install", "chromium"]);
-if (exitCode != 0)
+// Step 1: Ensure Chrome is running with remote debugging
+var chromeConnected = false;
+IBrowser? browser = null;
+
+// Check if Chrome is already running with debugging port
+using var playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+
+try
 {
-    Console.Error.WriteLine($"Playwright browser install failed (exit {exitCode}).");
+    browser = await playwright.Chromium.ConnectOverCDPAsync($"http://localhost:{debugPort}").ConfigureAwait(false);
+    Console.WriteLine($"Connected to Chrome on port {debugPort}.");
+    chromeConnected = true;
+}
+#pragma warning disable CA1031
+catch
+#pragma warning restore CA1031
+{
+    // Chrome not running with debugging port
+}
+
+if (!chromeConnected)
+{
+    Console.WriteLine($"Chrome is not running with remote debugging on port {debugPort}.");
+    Console.WriteLine();
+    Console.WriteLine("Please restart Chrome with this command (close Chrome first):");
+    Console.WriteLine();
+
+    var chromePath = FindChromePath();
+    var profilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Google", "Chrome", "User Data");
+
+    Console.WriteLine($"  \"{chromePath}\" --remote-debugging-port={debugPort} --user-data-dir=\"{profilePath}\"");
+    Console.WriteLine();
+    Console.WriteLine("Or on Windows, from Run (Win+R):");
+    Console.WriteLine($"  chrome --remote-debugging-port={debugPort}");
+    Console.WriteLine();
+    Console.Write("Press Enter once Chrome is running with debugging enabled... ");
+    Console.ReadLine();
+
+    try
+    {
+        browser = await playwright.Chromium.ConnectOverCDPAsync($"http://localhost:{debugPort}").ConfigureAwait(false);
+        Console.WriteLine("Connected!");
+        chromeConnected = true;
+    }
+    catch (PlaywrightException ex)
+    {
+        Console.Error.WriteLine($"Failed to connect: {ex.Message.Split('\n')[0]}");
+        Console.Error.WriteLine("Make sure Chrome is running with --remote-debugging-port=9222");
+        return 1;
+    }
+}
+
+// Step 2: Get existing contexts or create a page
+var contexts = browser!.Contexts;
+IBrowserContext context;
+IPage page;
+
+if (contexts.Count > 0)
+{
+    context = contexts[0];
+    page = context.Pages.FirstOrDefault(p =>
+        p.Url.Contains("voice.google.com", StringComparison.OrdinalIgnoreCase))
+        ?? context.Pages[0];
+    Console.WriteLine($"Using existing page: {page.Url}");
+}
+else
+{
+    context = await browser.NewContextAsync().ConfigureAwait(false);
+    page = await context.NewPageAsync().ConfigureAwait(false);
+}
+
+// Step 3: Navigate to voice.google.com if not already there
+if (!page.Url.Contains("voice.google.com", StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine("Navigating to voice.google.com...");
+    await page.GotoAsync("https://voice.google.com", new PageGotoOptions
+    {
+        WaitUntil = WaitUntilState.NetworkIdle,
+        Timeout = 30_000,
+    }).ConfigureAwait(false);
+}
+
+// Check if logged in
+if (!page.Url.Contains("voice.google.com", StringComparison.OrdinalIgnoreCase) ||
+    page.Url.Contains("workspace.google.com", StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine("Not logged in to Google Voice. Please log in via Chrome and re-run.");
     return 1;
 }
 
-using var playwright = await Playwright.CreateAsync().ConfigureAwait(false);
+Console.WriteLine($"Logged in! URL: {page.Url}");
 
-// Try launching with user's Chrome profile first
-IBrowserContext? browserContext = null;
-IBrowser? standaloneBrowser = null;
-
-var chromeProfilePath = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "Google", "Chrome", "User Data");
-
-if (Directory.Exists(chromeProfilePath))
-{
-    Console.WriteLine("Attempting to launch with your Chrome profile...");
-    try
-    {
-        browserContext = await playwright.Chromium.LaunchPersistentContextAsync(
-            chromeProfilePath,
-            new BrowserTypeLaunchPersistentContextOptions
-            {
-                Channel = "chrome",
-                Headless = false,
-                Args = ["--disable-blink-features=AutomationControlled"],
-            }).ConfigureAwait(false);
-        Console.WriteLine("Chrome launched with your profile.");
-    }
-#pragma warning disable CA1031 // Profile lock is expected when Chrome is running
-    catch (PlaywrightException ex)
-#pragma warning restore CA1031
-    {
-        Console.WriteLine($"Could not use Chrome profile: {ex.Message.Split('\n')[0]}");
-        Console.WriteLine();
-        Console.WriteLine("Chrome is likely running. Options:");
-        Console.WriteLine("  1. Close Chrome and re-run this tool");
-        Console.WriteLine("  2. Press Enter to open a fresh browser (you'll need to log in)");
-        Console.Write("> ");
-        Console.ReadLine();
-    }
-}
-
-if (browserContext is null)
-{
-    Console.WriteLine("Launching fresh Chromium...");
-    standaloneBrowser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-    {
-        Headless = false,
-    }).ConfigureAwait(false);
-    browserContext = await standaloneBrowser.NewContextAsync().ConfigureAwait(false);
-}
-
-// Get or create a page
-var page = browserContext.Pages.Count > 0
-    ? browserContext.Pages[0]
-    : await browserContext.NewPageAsync().ConfigureAwait(false);
-
-// Navigate to voice.google.com
-Console.WriteLine("Navigating to voice.google.com...");
-await page.GotoAsync("https://voice.google.com", new PageGotoOptions
-{
-    WaitUntil = WaitUntilState.NetworkIdle,
-    Timeout = 120_000,
-}).ConfigureAwait(false);
-
-// Check if we need to log in (workspace.google.com = marketing page = not logged in)
-var url = page.Url;
-if (url.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase) ||
-    url.Contains("signin", StringComparison.OrdinalIgnoreCase) ||
-    url.Contains("workspace.google.com", StringComparison.OrdinalIgnoreCase) ||
-    !url.Contains("voice.google.com", StringComparison.OrdinalIgnoreCase))
-{
-    Console.WriteLine();
-    Console.WriteLine("You need to log in to Google. Complete the login in the browser window.");
-    Console.WriteLine("Waiting for voice.google.com to load (timeout: 120s)...");
-
-    // Navigate to the actual login flow if we ended up on a marketing page
-    if (!url.Contains("accounts.google.com", StringComparison.OrdinalIgnoreCase))
-    {
-        await page.GotoAsync("https://accounts.google.com/ServiceLogin?continue=https://voice.google.com",
-            new PageGotoOptions { Timeout = 30_000 }).ConfigureAwait(false);
-    }
-
-    await page.WaitForURLAsync("**/voice.google.com/**", new PageWaitForURLOptions
-    {
-        Timeout = 120_000,
-    }).ConfigureAwait(false);
-
-    // Wait for page to fully load after login redirect
-    await page.WaitForLoadStateAsync(LoadState.NetworkIdle).ConfigureAwait(false);
-}
-
-Console.WriteLine($"Logged in! Current URL: {page.Url}");
-
-// Extract ALL cookies for google.com domains
-var allCookies = await browserContext.CookiesAsync([
+// Step 4: Extract ALL cookies
+var allCookies = await context.CookiesAsync([
     "https://voice.google.com",
     "https://clients6.google.com",
     "https://signaler-pa.clients6.google.com",
+    "https://www.google.com",
 ]).ConfigureAwait(false);
 
 Console.WriteLine($"Extracted {allCookies.Count} cookies.");
 
-// Build the raw cookie header (all cookies, semicolon-separated)
+// Build raw cookie header
 var cookieHeader = string.Join("; ", allCookies.Select(c => $"{c.Name}={c.Value}"));
 
-// Extract key cookies for GvCookieSet fields
 string GetCookie(string name) =>
     allCookies.FirstOrDefault(c => c.Name == name)?.Value ?? string.Empty;
 
 var sapisid = GetCookie("SAPISID");
 if (string.IsNullOrEmpty(sapisid))
 {
-    Console.Error.WriteLine("ERROR: SAPISID cookie not found. Are you logged in to the correct Google account?");
-    if (standaloneBrowser is not null)
-        await standaloneBrowser.CloseAsync().ConfigureAwait(false);
-    else
-        await browserContext.CloseAsync().ConfigureAwait(false);
+    Console.Error.WriteLine("ERROR: SAPISID cookie not found.");
+    Console.Error.WriteLine("Make sure you're logged in to Google Voice in Chrome.");
     return 1;
 }
 
-Console.WriteLine($"SAPISID: {sapisid[..10]}... ({sapisid.Length} chars)");
+Console.WriteLine($"SAPISID: {sapisid[..Math.Min(10, sapisid.Length)]}... ({sapisid.Length} chars)");
+Console.WriteLine($"SID: {(GetCookie("SID").Length > 0 ? "present" : "MISSING")}");
+Console.WriteLine($"SIDCC: {(GetCookie("SIDCC").Length > 0 ? "present" : "MISSING")}");
+Console.WriteLine($"__Secure-1PSIDTS: {(GetCookie("__Secure-1PSIDTS").Length > 0 ? "present" : "MISSING")}");
 Console.WriteLine($"Cookie header: {cookieHeader.Length} chars total");
 
-// Capture signaler traffic if requested
-List<object>? signalerCaptures = null;
+// Step 5: Capture signaler traffic if requested
 if (captureSignaler)
 {
     Console.WriteLine();
     Console.WriteLine("Capturing signaler traffic for 15 seconds...");
-    signalerCaptures = [];
+    var signalerCaptures = new List<object>();
 
-    page.Request += (_, request) =>
+    // Use CDP to capture network traffic (more reliable than page events for existing pages)
+    var cdpSession = await page.Context.NewCDPSessionAsync(page).ConfigureAwait(false);
+    await cdpSession.SendAsync("Network.enable").ConfigureAwait(false);
+
+    var requestBodies = new Dictionary<string, string>();
+
+    cdpSession.Event("Network.requestWillBeSent").OnEvent += (sender, args) =>
     {
-        if (request.Url.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
+        var json = JsonSerializer.Deserialize<JsonElement>(args.ToString()!);
+        var reqUrl = json.GetProperty("request").GetProperty("url").GetString() ?? "";
+        if (reqUrl.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
         {
+            var requestId = json.GetProperty("requestId").GetString() ?? "";
+            var method = json.GetProperty("request").GetProperty("method").GetString();
+            var headers = json.GetProperty("request").GetProperty("headers");
+            string? postData = null;
+            if (json.GetProperty("request").TryGetProperty("postData", out var pd))
+                postData = pd.GetString();
+
             signalerCaptures.Add(new
             {
                 Type = "request",
                 Timestamp = DateTimeOffset.UtcNow.ToString("o"),
-                request.Url,
-                Method = request.Method,
-                Headers = request.Headers,
-                PostData = request.PostData,
+                Url = reqUrl,
+                Method = method,
+                RequestId = requestId,
+                Headers = headers.ToString(),
+                PostData = postData,
             });
-            Console.WriteLine($"  [REQ] {request.Method} {request.Url[..Math.Min(120, request.Url.Length)]}...");
+            Console.WriteLine($"  [REQ] {method} {reqUrl[..Math.Min(100, reqUrl.Length)]}...");
         }
     };
 
-    page.Response += (_, response) =>
+    cdpSession.Event("Network.responseReceived").OnEvent += (sender, args) =>
     {
-        if (response.Url.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
+        var json = JsonSerializer.Deserialize<JsonElement>(args.ToString()!);
+        var respUrl = json.GetProperty("response").GetProperty("url").GetString() ?? "";
+        if (respUrl.Contains("signaler-pa.clients6.google.com", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine($"  [RES] {response.Status} {response.Url[..Math.Min(120, response.Url.Length)]}...");
+            var status = json.GetProperty("response").GetProperty("status").GetInt32();
+            var requestId = json.GetProperty("requestId").GetString() ?? "";
+            signalerCaptures.Add(new
+            {
+                Type = "response",
+                Timestamp = DateTimeOffset.UtcNow.ToString("o"),
+                Url = respUrl,
+                Status = status,
+                RequestId = requestId,
+            });
+            Console.WriteLine($"  [RES] {status} {respUrl[..Math.Min(100, respUrl.Length)]}...");
+
+            // Try to get response body
             _ = Task.Run(async () =>
             {
-                string? body = null;
-                try { body = await response.TextAsync().ConfigureAwait(false); }
-#pragma warning disable CA1031
-                catch { /* response body may not be available */ }
-#pragma warning restore CA1031
-                signalerCaptures.Add(new
+                try
                 {
-                    Type = "response",
-                    Timestamp = DateTimeOffset.UtcNow.ToString("o"),
-                    response.Url,
-                    Status = response.Status,
-                    ResponseBody = body,
-                });
+                    var bodyResult = await cdpSession.SendAsync("Network.getResponseBody",
+                        new Dictionary<string, object> { ["requestId"] = requestId }).ConfigureAwait(false);
+                    var body = bodyResult?.Deserialize<JsonElement>();
+                    if (body is not null)
+                    {
+                        var bodyText = body.Value.GetProperty("body").GetString();
+                        signalerCaptures.Add(new
+                        {
+                            Type = "response-body",
+                            RequestId = requestId,
+                            Body = bodyText?[..Math.Min(10000, bodyText?.Length ?? 0)],
+                        });
+                    }
+                }
+#pragma warning disable CA1031
+                catch { /* body may not be available */ }
+#pragma warning restore CA1031
             });
         }
     };
@@ -194,7 +226,9 @@ if (captureSignaler)
     Console.WriteLine("Waiting 15 seconds for signaler traffic...");
     await Task.Delay(15_000).ConfigureAwait(false);
 
-    Console.WriteLine($"Captured {signalerCaptures.Count} signaler requests/responses.");
+    await cdpSession.SendAsync("Network.disable").ConfigureAwait(false);
+
+    Console.WriteLine($"Captured {signalerCaptures.Count} signaler entries.");
 
     // Save captures
     var capturesDir = Path.Combine(outputDir, "captures");
@@ -204,10 +238,10 @@ if (captureSignaler)
     var captureJson = JsonSerializer.Serialize(signalerCaptures,
         new JsonSerializerOptions { WriteIndented = true });
     await File.WriteAllTextAsync(captureFile, captureJson).ConfigureAwait(false);
-    Console.WriteLine($"Saved signaler capture to: {captureFile}");
+    Console.WriteLine($"Saved: {captureFile}");
 }
 
-// Build GvCookieSet and encrypt
+// Step 6: Encrypt cookies
 var cookieSet = new GvCookieSet
 {
     Sapisid = sapisid,
@@ -234,13 +268,13 @@ Console.WriteLine();
 Console.WriteLine($"cookies.enc: {ciphertext.Length} bytes -> {cookiePath}");
 Console.WriteLine($"key.bin: 32 bytes -> {keyPath}");
 
-// Quick verification
+// Step 7: Verify
 Console.WriteLine();
 Console.WriteLine("Verifying cookies with account/get...");
 using var httpClient = new HttpClient();
 var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 var hashInput = $"{timestamp} {sapisid} https://voice.google.com";
-#pragma warning disable CA5350 // SHA1 required by Google SAPISIDHASH
+#pragma warning disable CA5350
 var hash = Convert.ToHexStringLower(
     System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(hashInput)));
 #pragma warning restore CA5350
@@ -261,13 +295,19 @@ Console.WriteLine($"account/get: {(int)verifyResp.StatusCode} {verifyResp.Status
 if (verifyResp.IsSuccessStatusCode)
     Console.WriteLine("Cookie extraction successful! Ready for GV API calls.");
 else
-    Console.Error.WriteLine("WARNING: Cookies may be invalid. Check the output above.");
+    Console.Error.WriteLine("WARNING: Verification failed. Cookies may be expired.");
 
-// Close browser
-if (standaloneBrowser is not null)
-    await standaloneBrowser.CloseAsync().ConfigureAwait(false);
-else
-    await browserContext.CloseAsync().ConfigureAwait(false);
-
-Console.WriteLine("Done.");
+// Don't close browser — user keeps using Chrome
+Console.WriteLine("Done. (Chrome stays open)");
 return 0;
+
+static string FindChromePath()
+{
+    var candidates = new[]
+    {
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+    };
+    return candidates.FirstOrDefault(File.Exists) ?? "chrome";
+}
