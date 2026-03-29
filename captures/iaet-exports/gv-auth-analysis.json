@@ -1,0 +1,172 @@
+{
+  "browserState": {
+    "wsProtocol": true,
+    "signalerRequests": [
+      {
+        "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=rpc&SID=E7SLxaFDkSl6aO",
+        "duration": 242857,
+        "type": "xmlhttprequest"
+      },
+      {
+        "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+        "duration": 137,
+        "type": "xmlhttprequest"
+      },
+      {
+        "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=rpc&SID=E7SLxaFDkSl6aO",
+        "duration": 243599,
+        "type": "xmlhttprequest"
+      },
+      {
+        "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+        "duration": 39,
+        "type": "xmlhttprequest"
+      },
+      {
+        "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+        "duration": 98,
+        "type": "xmlhttprequest"
+      }
+    ],
+    "rtcPeers": "available"
+  },
+  "authCookies": [
+    {
+      "name": "__Secure-1PSID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.702Z",
+      "httpOnly": true,
+      "secure": true,
+      "valueLength": 153,
+      "valuePrefix": "g.a0008QganpLWRzO0Ob..."
+    },
+    {
+      "name": "COMPASS",
+      "domain": "clients6.google.com",
+      "expires": "2026-04-08T15:09:21.493Z",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "valueLength": 129,
+      "valuePrefix": "voice-api=CgAQsJ2lzg..."
+    },
+    {
+      "name": "__Secure-3PSID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.702Z",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "valueLength": 153,
+      "valuePrefix": "g.a0008QganpLWRzO0Ob..."
+    },
+    {
+      "name": "SID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.702Z",
+      "httpOnly": false,
+      "secure": false,
+      "valueLength": 153,
+      "valuePrefix": "g.a0008QganpLWRzO0Ob..."
+    },
+    {
+      "name": "HSID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.330Z",
+      "httpOnly": true,
+      "secure": false,
+      "valueLength": 17,
+      "valuePrefix": "A4Jf8M4BinQCDuo55..."
+    },
+    {
+      "name": "SSID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.330Z",
+      "httpOnly": true,
+      "secure": true,
+      "valueLength": 17,
+      "valuePrefix": "ADFzMOuJLThmYjNxy..."
+    },
+    {
+      "name": "SAPISID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.330Z",
+      "httpOnly": false,
+      "secure": true,
+      "valueLength": 34,
+      "valuePrefix": "sQohYvkE_QjIx3CZ/AKO..."
+    },
+    {
+      "name": "COMPASS",
+      "domain": "voice.clients6.google.com",
+      "expires": "2026-04-08T15:09:21.077Z",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "valueLength": 129,
+      "valuePrefix": "voice-api=CgAQsJ2lzg..."
+    },
+    {
+      "name": "APISID",
+      "domain": ".google.com",
+      "expires": "2027-05-03T15:09:19.330Z",
+      "httpOnly": false,
+      "secure": false,
+      "valueLength": 34,
+      "valuePrefix": "tmX0YpcwgaaUrzdD/A7i..."
+    },
+    {
+      "name": "OSID",
+      "domain": "voice.google.com",
+      "expires": "2027-05-03T15:09:19.919Z",
+      "httpOnly": true,
+      "secure": true,
+      "valueLength": 153,
+      "valuePrefix": "g.a0008QganozpybVvhm..."
+    },
+    {
+      "name": "COMPASS",
+      "domain": "voice.google.com",
+      "expires": "2026-04-08T15:09:20.202Z",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "valueLength": 158,
+      "valuePrefix": "voice-web-frontend=C..."
+    }
+  ],
+  "signalerUrls": [
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/v1/chooseServer?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg",
+      "duration": 46
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=67947&CVER=22&zx=79d7u04e4ssg&t=1",
+      "duration": 225
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=rpc&SID=E7SLxaFDkSl6aObTpIczXQ&AID=0&CI=0&TYPE=xmlhttp&zx=7dz9s1x3tah&t=1",
+      "duration": 241507
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=rpc&SID=E7SLxaFDkSl6aObTpIczXQ&AID=25&CI=0&TYPE=xmlhttp&zx=9s6p4f105kjj&t=1",
+      "duration": 242857
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+      "duration": 137
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&RID=rpc&SID=E7SLxaFDkSl6aObTpIczXQ&AID=38&CI=0&TYPE=xmlhttp&zx=knxdclrpc65c&t=1",
+      "duration": 243599
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+      "duration": 39
+    },
+    {
+      "url": "https://signaler-pa.clients6.google.com/punctual/v1/refreshCreds?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg&gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ",
+      "duration": 98
+    }
+  ]
+}
