@@ -38,7 +38,9 @@ public sealed class GvSipCredentialProvider
         LogFetching(_logger, null);
 
         var client = _httpClientFactory.CreateClient("GvApi");
-        var requestBody = "[]"; // sipregisterinfo/get takes empty array
+        // sipregisterinfo/get requires [3,"<deviceId>"] — deviceId can be any unique string
+        var deviceId = $"gvresearch-{Environment.MachineName}";
+        var requestBody = $"[3,\"{deviceId}\"]";
 
         using var content = new StringContent(requestBody, Encoding.UTF8, "application/json+protobuf");
         var response = await client
@@ -46,9 +48,15 @@ public sealed class GvSipCredentialProvider
                 new Uri($"voice/v1/voiceclient/sipregisterinfo/get?{_apiConfig.QueryString}", UriKind.Relative),
                 content, ct)
             .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+#pragma warning disable CA1848, CA1873 // Debug logging for troubleshooting
+            _logger.LogError("sipregisterinfo/get failed: {Status} body={Body}",
+                (int)response.StatusCode, json.Length > 500 ? json[..500] : json);
+#pragma warning restore CA1848, CA1873
+            response.EnsureSuccessStatusCode(); // throws
+        }
 
         // Response format: [["sipToken",expiry],null,null,["authToken","cryptoKey"]]
         // Or possibly more complex — parse defensively
