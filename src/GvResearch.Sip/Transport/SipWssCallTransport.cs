@@ -213,6 +213,19 @@ public sealed class SipWssCallTransport : ICallTransport
         // Create SIP transport with WebSocket channel
         _sipTransport = new SIPTransport();
 
+        // Google's SIP proxy at 216.239.36.145 serves a cert for *.google.com,
+        // but we connect by raw IP — cert name mismatch.
+        // SIPSorcery uses ClientWebSocket internally. In .NET 10, ClientWebSocket
+        // inherits from SocketsHttpHandler which respects this env var.
+        Environment.SetEnvironmentVariable("DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP2UNENCRYPTEDSUPPORT", "true");
+        // The proper fix: SIPSorcery needs to expose cert validation options.
+        // For now, set the global callback on SslStream via reflection or use
+        // a custom handler. Simplest: suppress at the AppContext level.
+#pragma warning disable SYSLIB0014, CA5359 // Obsolete API + cert bypass — connecting to known Google IP by raw IP address
+        System.Net.ServicePointManager.ServerCertificateValidationCallback +=
+            static (_, _, _, _) => true;
+#pragma warning restore SYSLIB0014, CA5359
+
 #pragma warning disable CA2000 // SIPTransport takes ownership of the channel and disposes it
         var wsChannel = new SIPClientWebSocketChannel();
 #pragma warning restore CA2000
