@@ -68,10 +68,18 @@ public sealed class WebRtcCallTransport : ICallTransport
             await session.PeerConnection.setLocalDescription(offer).ConfigureAwait(false);
             var sdp = offer.sdp;
 
+#pragma warning disable CA1848, CA1873 // Debug logging for UAT
+            _logger.LogInformation("SDP offer created ({Length} chars):\n{Sdp}",
+                sdp.Length, sdp[..Math.Min(500, sdp.Length)]);
+#pragma warning restore CA1848, CA1873
+
             var answerTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pendingAnswers[callId] = answerTcs;
 
             await _signaler.SendSdpOfferAsync(callId, sdp, ct).ConfigureAwait(false);
+#pragma warning disable CA1848
+            _logger.LogInformation("SDP offer sent, waiting for answer (30s timeout)...");
+#pragma warning restore CA1848
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));

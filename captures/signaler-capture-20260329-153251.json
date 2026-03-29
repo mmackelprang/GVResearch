@@ -1,0 +1,92 @@
+[
+  {
+    "Type": "request",
+    "Timestamp": "2026-03-29T15:32:36.9356737\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/v1/chooseServer?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg",
+    "Method": "POST",
+    "RequestId": "56780.3173",
+    "Headers": "{\u0022sec-ch-ua-platform\u0022:\u0022\\\u0022Windows\\\u0022\u0022,\u0022Authorization\u0022:\u0022SAPISIDHASH 1774798356_61eee0d7caa724b98fb988c092a68808200c3272\u0022,\u0022Referer\u0022:\u0022https://voice.google.com/\u0022,\u0022sec-ch-ua\u0022:\u0022\\\u0022Chromium\\\u0022;v=\\\u0022146\\\u0022, \\\u0022Not-A.Brand\\\u0022;v=\\\u002224\\\u0022, \\\u0022Google Chrome\\\u0022;v=\\\u0022146\\\u0022\u0022,\u0022sec-ch-ua-mobile\u0022:\u0022?0\u0022,\u0022User-Agent\u0022:\u0022Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\u0022,\u0022Content-type\u0022:\u0022application/json\u002Bprotobuf\u0022,\u0022X-Goog-AuthUser\u0022:\u00220\u0022}",
+    "PostData": "[[null,null,null,[9,5],null,[null,[null,1],[[[\u00221\u0022]]]]],null,null,0,0]"
+  },
+  {
+    "Type": "response",
+    "Timestamp": "2026-03-29T15:32:37.0017075\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/v1/chooseServer?key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg",
+    "Status": 200,
+    "RequestId": "56780.3173"
+  },
+  {
+    "Type": "request",
+    "Timestamp": "2026-03-29T15:32:37.0358582\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=67947\u0026CVER=22\u0026zx=79d7u04e4ssg\u0026t=1",
+    "Method": "POST",
+    "RequestId": "56780.3191",
+    "Headers": "{\u0022sec-ch-ua-platform\u0022:\u0022\\\u0022Windows\\\u0022\u0022,\u0022Authorization\u0022:\u0022SAPISIDHASH 1774798357_49f1255f46332cec0d91d3728072667d10408ba0\u0022,\u0022Referer\u0022:\u0022https://voice.google.com/\u0022,\u0022sec-ch-ua\u0022:\u0022\\\u0022Chromium\\\u0022;v=\\\u0022146\\\u0022, \\\u0022Not-A.Brand\\\u0022;v=\\\u002224\\\u0022, \\\u0022Google Chrome\\\u0022;v=\\\u0022146\\\u0022\u0022,\u0022sec-ch-ua-mobile\u0022:\u0022?0\u0022,\u0022X-WebChannel-Content-Type\u0022:\u0022application/json\u002Bprotobuf\u0022,\u0022User-Agent\u0022:\u0022Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\u0022,\u0022Content-Type\u0022:\u0022application/x-www-form-urlencoded\u0022,\u0022X-Goog-AuthUser\u0022:\u00220\u0022}",
+    "PostData": "count=6\u0026ofs=0\u0026req0___data__=%5B%5B%5B1%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%221%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D\u0026req1___data__=%5B%5B%5B2%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%223%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D\u0026req2___data__=%5B%5B%5B3%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%221%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D\u0026req3___data__=%5B%5B%5B4%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%221%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D\u0026req4___data__=%5B%5B%5B5%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%222%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D\u0026req5___data__=%5B%5B%5B6%2C%5Bnull%2Cnull%2Cnull%2C%5B9%2C5%5D%2Cnull%2C%5Bnull%2C%5Bnull%2C1%5D%2C%5B%5B%5B%223%22%5D%5D%5D%5D%2Cnull%2Cnull%2C1%5D%2Cnull%2C3%5D%5D%5D"
+  },
+  {
+    "Type": "request",
+    "Timestamp": "2026-03-29T15:32:37.0370162\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=67947\u0026CVER=22\u0026zx=79d7u04e4ssg\u0026t=1",
+    "Method": "OPTIONS",
+    "RequestId": "B617635FC67630B82BB68EB4709A4032",
+    "Headers": "{\u0022Accept\u0022:\u0022*/*\u0022,\u0022Access-Control-Request-Headers\u0022:\u0022authorization,x-goog-authuser,x-webchannel-content-type\u0022,\u0022Access-Control-Request-Method\u0022:\u0022POST\u0022,\u0022Origin\u0022:\u0022https://voice.google.com\u0022,\u0022Sec-Fetch-Mode\u0022:\u0022cors\u0022,\u0022User-Agent\u0022:\u0022Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\u0022}",
+    "PostData": null
+  },
+  {
+    "Type": "response-body",
+    "RequestId": "56780.3173",
+    "Body": "[\u0022ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0022,3,null,\u00221774798356265795\u0022,\u00221774798356265935\u0022]"
+  },
+  {
+    "Type": "response",
+    "Timestamp": "2026-03-29T15:32:37.2235542\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=67947\u0026CVER=22\u0026zx=79d7u04e4ssg\u0026t=1",
+    "Status": 200,
+    "RequestId": "B617635FC67630B82BB68EB4709A4032"
+  },
+  {
+    "Type": "response",
+    "Timestamp": "2026-03-29T15:32:37.2679842\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=67947\u0026CVER=22\u0026zx=79d7u04e4ssg\u0026t=1",
+    "Status": 200,
+    "RequestId": "56780.3191"
+  },
+  {
+    "Type": "request",
+    "Timestamp": "2026-03-29T15:32:37.2682969\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=rpc\u0026SID=E7SLxaFDkSl6aObTpIczXQ\u0026AID=0\u0026CI=0\u0026TYPE=xmlhttp\u0026zx=7dz9s1x3tah\u0026t=1",
+    "Method": "GET",
+    "RequestId": "56780.3250",
+    "Headers": "{\u0022sec-ch-ua-platform\u0022:\u0022\\\u0022Windows\\\u0022\u0022,\u0022Authorization\u0022:\u0022SAPISIDHASH 1774798357_49f1255f46332cec0d91d3728072667d10408ba0\u0022,\u0022Referer\u0022:\u0022https://voice.google.com/\u0022,\u0022User-Agent\u0022:\u0022Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\u0022,\u0022sec-ch-ua\u0022:\u0022\\\u0022Chromium\\\u0022;v=\\\u0022146\\\u0022, \\\u0022Not-A.Brand\\\u0022;v=\\\u002224\\\u0022, \\\u0022Google Chrome\\\u0022;v=\\\u0022146\\\u0022\u0022,\u0022X-Goog-AuthUser\u0022:\u00220\u0022,\u0022sec-ch-ua-mobile\u0022:\u0022?0\u0022}",
+    "PostData": null
+  },
+  {
+    "Type": "request",
+    "Timestamp": "2026-03-29T15:32:37.2694471\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=rpc\u0026SID=E7SLxaFDkSl6aObTpIczXQ\u0026AID=0\u0026CI=0\u0026TYPE=xmlhttp\u0026zx=7dz9s1x3tah\u0026t=1",
+    "Method": "OPTIONS",
+    "RequestId": "95297EA0FA484963FD3E589A16CF84E4",
+    "Headers": "{\u0022Accept\u0022:\u0022*/*\u0022,\u0022Access-Control-Request-Headers\u0022:\u0022authorization,x-goog-authuser\u0022,\u0022Access-Control-Request-Method\u0022:\u0022GET\u0022,\u0022Origin\u0022:\u0022https://voice.google.com\u0022,\u0022Sec-Fetch-Mode\u0022:\u0022cors\u0022,\u0022User-Agent\u0022:\u0022Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36\u0022}",
+    "PostData": null
+  },
+  {
+    "Type": "response-body",
+    "RequestId": "56780.3191",
+    "Body": "51\n[[0,[\u0022c\u0022,\u0022E7SLxaFDkSl6aObTpIczXQ\u0022,\u0022\u0022,8,14,30000]]]\n"
+  },
+  {
+    "Type": "response",
+    "Timestamp": "2026-03-29T15:32:37.3169652\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=rpc\u0026SID=E7SLxaFDkSl6aObTpIczXQ\u0026AID=0\u0026CI=0\u0026TYPE=xmlhttp\u0026zx=7dz9s1x3tah\u0026t=1",
+    "Status": 200,
+    "RequestId": "95297EA0FA484963FD3E589A16CF84E4"
+  },
+  {
+    "Type": "response",
+    "Timestamp": "2026-03-29T15:32:37.4328472\u002B00:00",
+    "Url": "https://signaler-pa.clients6.google.com/punctual/multi-watch/channel?VER=8\u0026gsessionid=ym7wKJR17v4b3GMtnX8VSgFzLIUJ2tf1zTnsstvevUQ\u0026key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg\u0026RID=rpc\u0026SID=E7SLxaFDkSl6aObTpIczXQ\u0026AID=0\u0026CI=0\u0026TYPE=xmlhttp\u0026zx=7dz9s1x3tah\u0026t=1",
+    "Status": 200,
+    "RequestId": "56780.3250"
+  }
+]

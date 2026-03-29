@@ -30,6 +30,14 @@ public sealed class GvSignalerClient : IGvSignalerClient
         LoggerMessage.Define<string>(LogLevel.Debug, new EventId(6, "SignalerChooseServer"),
             "Signaler chooseServer response: {Response}");
 
+    private static readonly Action<ILogger, string, Exception?> LogPollRawBody =
+        LoggerMessage.Define<string>(LogLevel.Debug, new EventId(7, "SignalerPollRaw"),
+            "Signaler poll raw body: {Body}");
+
+    private static readonly Action<ILogger, string, int, string, Exception?> LogSendDetail =
+        LoggerMessage.Define<string, int, string>(LogLevel.Information, new EventId(8, "SignalerSendDetail"),
+            "Signaler send: url contains SID={Sid}, RID={Rid}, body={Body}");
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly GvApiConfig _apiConfig;
     private readonly ILogger<GvSignalerClient> _logger;
@@ -153,10 +161,23 @@ public sealed class GvSignalerClient : IGvSignalerClient
 
         var body = $"count=1&ofs=0&req0___data__={encodedData}";
 
+        LogSendDetail(_logger, _sessionId ?? "?", rid, body.Length > 300 ? body[..300] + "..." : body, null);
+
         using var content = new StringContent(body, Encoding.UTF8, "application/x-www-form-urlencoded");
         var response = await client
             .PostAsync(new Uri(url, UriKind.Relative), content, ct)
             .ConfigureAwait(false);
+
+        var responseBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            LogSendDetail(_logger,
+                $"resp:{(int)response.StatusCode}",
+                rid,
+                responseBody.Length > 300 ? responseBody[..300] + "..." : responseBody,
+                null);
+        }
+
         response.EnsureSuccessStatusCode();
     }
 
@@ -187,6 +208,8 @@ public sealed class GvSignalerClient : IGvSignalerClient
                 }
 
                 var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(body))
+                    LogPollRawBody(_logger, body.Length > 500 ? body[..500] + "..." : body, null);
                 var jsonBody = StripLengthPrefix(body);
                 var events = SignalerMessageParser.Parse(jsonBody);
 
