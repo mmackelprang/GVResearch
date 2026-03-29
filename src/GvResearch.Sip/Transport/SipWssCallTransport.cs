@@ -317,7 +317,7 @@ public sealed class SipWssCallTransport : ICallTransport
             regDeviceUuid, 1, authHeader: null);
 
 #pragma warning disable CA1848, CA1873
-        _logger.LogInformation("Sending SIP REGISTER (no auth)...");
+        _logger.LogInformation("Sending SIP REGISTER (no auth):\n{Register}", reg1);
 #pragma warning restore CA1848, CA1873
 
         await _wsChannel.SendAsync(reg1, ct).ConfigureAwait(false);
@@ -336,25 +336,26 @@ public sealed class SipWssCallTransport : ICallTransport
     private static string BuildRegister(string sipUsername, string callId, string tag,
         string wsHost, string contactUser, string deviceUuid, int cseq, string? authHeader)
     {
-#pragma warning disable CA1305 // SIP is ASCII protocol text
+        // SIP requires exactly \r\n line endings (RFC 3261 Section 7)
+#pragma warning disable CA1305
         var sb = new StringBuilder();
-        sb.AppendLine($"REGISTER sip:{SipDomain} SIP/2.0");
-        sb.AppendLine($"Via: SIP/2.0/wss {wsHost};branch={CallProperties.CreateBranchId()};keep");
-        sb.AppendLine($"Max-Forwards: 69");
-        sb.AppendLine($"To: <sip:{sipUsername}@{SipDomain}>");
-        sb.AppendLine($"From: <sip:{sipUsername}@{SipDomain}>;tag={tag}");
-        sb.AppendLine($"Call-ID: {callId}");
-        sb.AppendLine($"CSeq: {cseq} REGISTER");
+        sb.Append($"REGISTER sip:{SipDomain} SIP/2.0\r\n");
+        sb.Append($"Via: SIP/2.0/wss {wsHost};branch={CallProperties.CreateBranchId()};keep\r\n");
+        sb.Append($"Max-Forwards: 69\r\n");
+        sb.Append($"To: <sip:{sipUsername}@{SipDomain}>\r\n");
+        sb.Append($"From: <sip:{sipUsername}@{SipDomain}>;tag={tag}\r\n");
+        sb.Append($"Call-ID: {callId}\r\n");
+        sb.Append($"CSeq: {cseq} REGISTER\r\n");
         if (authHeader is not null)
-            sb.AppendLine(authHeader);
-        sb.AppendLine($"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w");
-        sb.AppendLine($"Contact: <sip:{contactUser}@{wsHost};transport=wss>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:{deviceUuid}>\";expires=3600");
-        sb.AppendLine($"Expires: 3600");
-        sb.AppendLine($"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK");
-        sb.AppendLine($"Supported: path,gruu,outbound,record-aware");
-        sb.AppendLine($"User-Agent: {UserAgent}");
-        sb.AppendLine($"Content-Length: 0");
-        sb.AppendLine();
+            sb.Append(authHeader).Append("\r\n");
+        sb.Append($"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w\r\n");
+        sb.Append($"Contact: <sip:{contactUser}@{wsHost};transport=wss>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:{deviceUuid}>\";expires=3600\r\n");
+        sb.Append($"Expires: 3600\r\n");
+        sb.Append($"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK\r\n");
+        sb.Append($"Supported: path,gruu,outbound,record-aware\r\n");
+        sb.Append($"User-Agent: {UserAgent}\r\n");
+        sb.Append($"Content-Length: 0\r\n");
+        sb.Append("\r\n"); // empty line terminates SIP headers
 #pragma warning restore CA1305
         return sb.ToString();
     }

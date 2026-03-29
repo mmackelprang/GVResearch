@@ -38,7 +38,7 @@ public sealed class GvSipCredentialProvider
         LogFetching(_logger, null);
 
         var client = _httpClientFactory.CreateClient("GvApi");
-        // sipregisterinfo/get requires [3,"<deviceId>"] — deviceId can be any unique string
+        // sipregisterinfo/get requires [3,"<deviceId>"]
         var deviceId = $"gvresearch-{Environment.MachineName}";
         var requestBody = $"[3,\"{deviceId}\"]";
 
@@ -58,37 +58,42 @@ public sealed class GvSipCredentialProvider
             response.EnsureSuccessStatusCode(); // throws
         }
 
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("sipregisterinfo/get response ({Length} chars): {Body}",
+            json.Length, json[..Math.Min(500, json.Length)]);
+#pragma warning restore CA1848, CA1873
         // Response format: [["sipToken",expiry],null,null,["authToken","cryptoKey"]]
         // Or possibly more complex — parse defensively
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        // Extract SIP token (position 0)
-        var sipToken = "";
+        // Position 0: [timestamp, expiryMs] — NOT the SIP token
         var expiry = 600;
-        if (root.GetArrayLength() > 0 && root[0].ValueKind == JsonValueKind.Array)
+        if (root.GetArrayLength() > 0 && root[0].ValueKind == JsonValueKind.Array
+            && root[0].GetArrayLength() > 1)
         {
-            sipToken = root[0][0].GetString() ?? "";
-            if (root[0].GetArrayLength() > 1)
-                expiry = root[0][1].GetInt32();
+            expiry = root[0][1].GetInt32();
         }
 
-        // Extract auth token (position 3)
-        var bearerToken = "";
+        // Position 3: ["sipIdentityToken", "cryptoKey/password"]
+        var sipIdentity = "";
+        var sipPassword = "";
         if (root.GetArrayLength() > 3 && root[3].ValueKind == JsonValueKind.Array)
         {
-            bearerToken = root[3][0].GetString() ?? "";
+            sipIdentity = root[3][0].GetString() ?? "";
+            if (root[3].GetArrayLength() > 1)
+                sipPassword = root[3][1].GetString() ?? "";
         }
 
-        // Get phone number from account (we'll use the SIP token as username)
-        // The SIP URI username is the encoded token
-        var sipUsername = Uri.EscapeDataString(sipToken);
+        // The SIP identity token IS the SIP username (used in URI + Digest auth)
+        // It's base64-like and needs percent-encoding for SIP URIs (= → %3D)
+        var sipUsername = sipIdentity;
 
         LogFetched(_logger, expiry, null);
 
         return new SipCredentials(
             SipUsername: sipUsername,
-            BearerToken: bearerToken,
+            BearerToken: sipPassword, // The crypto key is the Digest auth password
             PhoneNumber: "+19196706660", // TODO: get from account/get
             ExpirySeconds: expiry);
     }

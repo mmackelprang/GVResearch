@@ -46,6 +46,8 @@ public sealed class GvSipWebSocketChannel : IDisposable
         _ws.Options.SetRequestHeader("User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36");
 
+        // Try without compression first — server may not require it
+
 #pragma warning disable CA1848, CA1873 // Debug/UAT tool
         _logger.LogInformation("Connecting WebSocket to {Uri}...", _serverUri);
 #pragma warning restore CA1848, CA1873
