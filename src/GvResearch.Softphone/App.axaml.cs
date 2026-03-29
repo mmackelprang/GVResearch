@@ -20,10 +20,19 @@ public sealed class SoftphoneApp : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var phoneClient = Program.Services?.GetService<GvPhoneClient>();
+            var vm = new MainWindowViewModel(phoneClient);
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(phoneClient)
+                DataContext = vm
             };
+
+            // Auto-dial if a phone number was passed as CLI argument
+            if (Program.AutoDialNumber is not null)
+            {
+                vm.Dialer.DialNumber = Program.AutoDialNumber;
+                // Trigger the call after the UI is loaded
+                desktop.MainWindow.Opened += (_, _) => vm.Dialer.CallCommand.Execute(null);
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

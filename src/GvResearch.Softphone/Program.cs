@@ -13,10 +13,16 @@ namespace GvResearch.Softphone;
 internal sealed class Program
 {
     public static ServiceProvider? Services { get; private set; }
+    public static string? AutoDialNumber { get; private set; }
 
     [STAThread]
     public static void Main(string[] args)
     {
+        // Support: dotnet run --project src/GvResearch.Softphone -- 9193718044
+        AutoDialNumber = args.FirstOrDefault(a => !a.StartsWith('-'));
+        if (AutoDialNumber is not null)
+            Console.WriteLine($"Auto-dial: {AutoDialNumber}");
+
         var config = new ConfigurationBuilder()
             .AddJsonFile("appsettings.json", optional: true)
             .AddEnvironmentVariables()
