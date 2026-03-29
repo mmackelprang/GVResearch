@@ -43,16 +43,41 @@ public sealed class GvSipWebSocketChannel : IDisposable
         _ws = new ClientWebSocket();
         _ws.Options.AddSubProtocol("sip");
 
-        // Bypass cert validation for raw IP connection to known Google server
-#pragma warning disable CA5359 // Connecting to known Google SIP proxy IP — cert name mismatch expected
+        // Bypass cert validation — the server at 216.239.36.145 serves a cert
+        // for "telephony.goog" but we connect by IP address
+#pragma warning disable CA5359 // Connecting to known Google SIP proxy IP
         _ws.Options.RemoteCertificateValidationCallback =
-            (sender, certificate, chain, sslPolicyErrors) => true;
+            static (_, _, _, _) => true;
 #pragma warning restore CA5359
 
-#pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
+        // Use an HttpMessageInvoker with cert bypass + HTTP/1.1 for WebSocket upgrade
+#pragma warning disable CA5359, CA2000 // Handler lifetime managed by the invoker
+        var handler = new SocketsHttpHandler
+        {
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = static (_, _, _, _) => true,
+                // Set the target host for SNI to match the cert subject
+                TargetHost = "telephony.goog",
+            },
+        };
+#pragma warning restore CA5359, CA2000
+        using var invoker = new HttpMessageInvoker(handler);
+
+        // Set Host header to match the cert CN
+        _ws.Options.SetRequestHeader("Host", "telephony.goog");
+
+#pragma warning disable CA1848, CA1873 // Debug/UAT tool
         _logger.LogInformation("Connecting WebSocket to {Uri}...", _serverUri);
-        await _ws.ConnectAsync(new Uri(_serverUri), ct).ConfigureAwait(false);
-        _logger.LogInformation("WebSocket connected!");
+#pragma warning restore CA1848, CA1873
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+        await _ws.ConnectAsync(new Uri(_serverUri), invoker, timeoutCts.Token).ConfigureAwait(false);
+
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("WebSocket connected! State={State}", _ws.State);
 #pragma warning restore CA1848, CA1873
 
         // Start receive loop
