@@ -258,11 +258,15 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning disable CA1848, CA1873
                             _logger.LogInformation("Got 401 challenge, computing Digest auth...");
 #pragma warning restore CA1848, CA1873
-                            var authHeader = resp.Header.AuthenticationHeaders.FirstOrDefault();
-                            if (authHeader is not null)
+                            // Parse nonce from raw WWW-Authenticate header
+                            var wwwAuth = message;
+                            var nonceIdx = wwwAuth.IndexOf("nonce=\"", StringComparison.Ordinal);
+                            if (nonceIdx >= 0)
                             {
-                                var nonce = authHeader.SIPDigest.Nonce;
-                                var realm = authHeader.SIPDigest.Realm;
+                                nonceIdx += 7;
+                                var nonceEnd = wwwAuth.IndexOf('"', nonceIdx);
+                                var nonce = wwwAuth[nonceIdx..nonceEnd];
+                                var realm = SipDomain;
 
                                 // Compute MD5 Digest response
                                 // HA1 = MD5(username:realm:password)
@@ -336,28 +340,28 @@ public sealed class SipWssCallTransport : ICallTransport
     private static string BuildRegister(string sipUsername, string callId, string tag,
         string wsHost, string contactUser, string deviceUuid, int cseq, string? authHeader)
     {
-        // SIP requires exactly \r\n line endings (RFC 3261 Section 7)
-#pragma warning disable CA1305
-        var sb = new StringBuilder();
-        sb.Append($"REGISTER sip:{SipDomain} SIP/2.0\r\n");
-        sb.Append($"Via: SIP/2.0/wss {wsHost};branch={CallProperties.CreateBranchId()};keep\r\n");
-        sb.Append($"Max-Forwards: 69\r\n");
-        sb.Append($"To: <sip:{sipUsername}@{SipDomain}>\r\n");
-        sb.Append($"From: <sip:{sipUsername}@{SipDomain}>;tag={tag}\r\n");
-        sb.Append($"Call-ID: {callId}\r\n");
-        sb.Append($"CSeq: {cseq} REGISTER\r\n");
-        if (authHeader is not null)
-            sb.Append(authHeader).Append("\r\n");
-        sb.Append($"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w\r\n");
-        sb.Append($"Contact: <sip:{contactUser}@{wsHost};transport=wss>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:{deviceUuid}>\";expires=3600\r\n");
-        sb.Append($"Expires: 3600\r\n");
-        sb.Append($"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK\r\n");
-        sb.Append($"Supported: path,gruu,outbound,record-aware\r\n");
-        sb.Append($"User-Agent: {UserAgent}\r\n");
-        sb.Append($"Content-Length: 0\r\n");
-        sb.Append("\r\n"); // empty line terminates SIP headers
-#pragma warning restore CA1305
-        return sb.ToString();
+        // Use raw string concatenation — proven working in standalone test
+        var sipUsernameEncoded = Uri.EscapeDataString(sipUsername);
+        var branch = CallProperties.CreateBranchId();
+
+        var msg = $"REGISTER sip:{SipDomain} SIP/2.0\r\n" +
+            $"Via: SIP/2.0/wss {wsHost};branch={branch};keep\r\n" +
+            $"Max-Forwards: 69\r\n" +
+            $"To: <sip:{sipUsernameEncoded}@{SipDomain}>\r\n" +
+            $"From: <sip:{sipUsernameEncoded}@{SipDomain}>;tag={tag}\r\n" +
+            $"Call-ID: {callId}\r\n" +
+            $"CSeq: {cseq} REGISTER\r\n" +
+            (authHeader is not null ? authHeader + "\r\n" : "") +
+            $"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w\r\n" +
+            $"Contact: <sip:{contactUser}@{wsHost};transport=wss>;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:{deviceUuid}>\";expires=3600\r\n" +
+            $"Expires: 3600\r\n" +
+            $"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK\r\n" +
+            $"Supported: path,gruu,outbound,record-aware\r\n" +
+            $"User-Agent: {UserAgent}\r\n" +
+            $"Content-Length: 0\r\n" +
+            $"\r\n";
+
+        return msg;
     }
 
     private static string Md5Hash(string input)
