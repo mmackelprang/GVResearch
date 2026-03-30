@@ -135,9 +135,7 @@ public sealed class SipWssCallTransport : ICallTransport
             var rtpCount = 0;
             const int opusChannels = 2; // stereo from Google
             const int maxFrameSamples = 960 * opusChannels; // 20ms at 48kHz stereo
-#pragma warning disable CA2000 // Opus decoder lifetime managed by call session
             var opusDecoder = Concentus.OpusCodecFactory.CreateDecoder(48000, opusChannels);
-#pragma warning restore CA2000
             pc.OnRtpPacketReceived += (ep, mt, pkt) =>
             {
                 // Allocate per-invocation to avoid cross-thread sharing (~23KB, acceptable)
@@ -237,13 +235,13 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning restore CA1848, CA1873
             };
 
-            // Create Opus encoder for outbound audio (48kHz mono, VOIP application)
-#pragma warning disable CA2000 // Encoder lifetime managed by SipCallSession.Dispose
+            // Create Opus encoder/decoder — lifetimes managed by SipCallSession.Dispose
+#pragma warning disable CA2000
             var opusEncoder = Concentus.OpusCodecFactory.CreateEncoder(48000, 1, Concentus.Enums.OpusApplication.OPUS_APPLICATION_VOIP);
 #pragma warning restore CA2000
 
-            // Store session with peer connection and encoder
-            var session = new SipCallSession(callId) { PeerConnection = pc, OpusEncoder = opusEncoder };
+            // Store session with peer connection, encoder, and decoder
+            var session = new SipCallSession(callId) { PeerConnection = pc, OpusEncoder = opusEncoder, OpusDecoder = opusDecoder };
             _activeCalls[callId] = session;
 
             var offer = pc.createOffer();
@@ -405,12 +403,15 @@ public sealed class SipWssCallTransport : ICallTransport
         if (invCallId is null || invVias.Count == 0 || _wsChannel is null)
             return;
 
+        // Generate a single To-tag for this dialog — must be consistent across 180 and 200
+        var dialogTag = CallProperties.CreateNewTag();
+
         // Send 180 Ringing
         var ringing = "SIP/2.0 180 Ringing\r\n";
         foreach (var via in invVias)
             ringing += $"Via: {via}\r\n";
         ringing +=
-            $"To: {invTo};tag={CallProperties.CreateNewTag()}\r\n" +
+            $"To: {invTo};tag={dialogTag}\r\n" +
             $"From: {invFrom}\r\n" +
             $"Call-ID: {invCallId}\r\n" +
             $"CSeq: {invCSeq}\r\n" +
@@ -458,11 +459,9 @@ public sealed class SipWssCallTransport : ICallTransport
         // Wire audio receive (same as outbound calls)
         var rtpCount = 0;
         const int inOpusChannels = 2;
-#pragma warning disable CA2000
         var inDecoder = Concentus.OpusCodecFactory.CreateDecoder(48000, inOpusChannels);
         var inEncoder = Concentus.OpusCodecFactory.CreateEncoder(48000, 1,
             Concentus.Enums.OpusApplication.OPUS_APPLICATION_VOIP);
-#pragma warning restore CA2000
 
         pc.OnRtpPacketReceived += (ep, mt, pkt) =>
         {
@@ -496,6 +495,7 @@ public sealed class SipWssCallTransport : ICallTransport
         {
             PeerConnection = pc,
             OpusEncoder = inEncoder,
+            OpusDecoder = inDecoder,
             RemoteContactUri = ExtractSipUri(invContact ?? ""),
             ToHeader = invTo,
             FromHeader = invFrom,
@@ -505,12 +505,12 @@ public sealed class SipWssCallTransport : ICallTransport
         inSession.RouteSet.Reverse();
         _activeCalls[invCallId] = inSession;
 
-        // Send 200 OK with SDP answer
+        // Send 200 OK with SDP answer — same tag as 180
         var ok200 = "SIP/2.0 200 OK\r\n";
         foreach (var via in invVias)
             ok200 += $"Via: {via}\r\n";
         ok200 +=
-            $"To: {invTo};tag={CallProperties.CreateNewTag()}\r\n" +
+            $"To: {invTo};tag={dialogTag}\r\n" +
             $"From: {invFrom}\r\n" +
             $"Call-ID: {invCallId}\r\n" +
             $"CSeq: {invCSeq}\r\n" +
@@ -542,7 +542,6 @@ public sealed class SipWssCallTransport : ICallTransport
             return;
 
         var refreshCSeq = Interlocked.Increment(ref _prackCSeq);
-        var sipUsernameEncoded = Uri.EscapeDataString(_credentials.SipUsername);
 
         var reInvite = $"INVITE {session.RemoteContactUri} SIP/2.0\r\n";
 
@@ -739,7 +738,7 @@ public sealed class SipWssCallTransport : ICallTransport
                                 && prackedRSeqs.Add(rseqValue)) // Only PRACK each RSeq once
                             {
                                 var contactSipUri = ExtractSipUri(contactUri);
-                                var currentPrackCSeq = _prackCSeq++;
+                                var currentPrackCSeq = Interlocked.Increment(ref _prackCSeq);
 
                                 // Build PRACK matching browser's exact format:
                                 // 1. Route order: REVERSED from Record-Route (non-econt first)
@@ -789,6 +788,21 @@ public sealed class SipWssCallTransport : ICallTransport
                             var callIdValue = ExtractHeaderValue(message, "Call-ID");
                             var recordRoutes = ExtractAllHeaders(message, "Record-Route");
 
+                            // Extract CSeq number from response — needed for ACK
+                            // (re-INVITE 200 OK has different CSeq than original INVITE)
+                            var respCSeqFull = ExtractHeaderValue(message, "CSeq");
+                            var respCSeqNum = _inviteCSeq; // fallback
+                            if (respCSeqFull is not null)
+                            {
+                                var spaceIdx = respCSeqFull.IndexOf(' ', StringComparison.Ordinal);
+                                if (spaceIdx > 0 && int.TryParse(respCSeqFull[..spaceIdx],
+                                    System.Globalization.NumberStyles.Integer,
+                                    System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                                {
+                                    respCSeqNum = parsed;
+                                }
+                            }
+
                             var contactSipUri = ExtractSipUri(contactUri ?? $"sip:unknown@{SipDomain}");
 
                             // Store dialog state for BYE
@@ -818,7 +832,7 @@ public sealed class SipWssCallTransport : ICallTransport
                                 $"To: {toHeader}\r\n" +
                                 $"From: {fromHeader}\r\n" +
                                 $"Call-ID: {callIdValue}\r\n" +
-                                $"CSeq: {_inviteCSeq} ACK\r\n" +
+                                $"CSeq: {respCSeqNum} ACK\r\n" +
                                 $"Content-Length: 0\r\n" +
                                 $"\r\n";
 
@@ -1066,6 +1080,7 @@ internal sealed class SipCallSession : IDisposable
     public string CallId { get; }
     public SIPSorcery.Net.RTCPeerConnection? PeerConnection { get; set; }
     public Concentus.IOpusEncoder? OpusEncoder { get; set; }
+    public Concentus.IOpusDecoder? OpusDecoder { get; set; }
     public CallStatusType Status { get; set; } = CallStatusType.Unknown;
 
     // Dialog state for BYE
@@ -1085,6 +1100,7 @@ internal sealed class SipCallSession : IDisposable
     public void Dispose()
     {
         SessionTimer?.Dispose();
+        (OpusDecoder as IDisposable)?.Dispose();
         (OpusEncoder as IDisposable)?.Dispose();
         PeerConnection?.close();
     }
