@@ -48,13 +48,16 @@ public static class CookieRetriever
         {
             log("Launching Chrome with remote debugging...");
 
-            // Kill existing Chrome to avoid port conflict
-            foreach (var proc in Process.GetProcessesByName("chrome"))
+            // Kill existing Chrome/Chromium to avoid port conflict
+            foreach (var name in new[] { "chrome", "chromium", "chromium-browser" })
             {
-                try { proc.Kill(); }
+                foreach (var proc in Process.GetProcessesByName(name))
+                {
+                    try { proc.Kill(); }
 #pragma warning disable CA1031
-                catch { /* best effort */ }
+                    catch { /* best effort */ }
 #pragma warning restore CA1031
+                }
             }
 
             await Task.Delay(2000, ct).ConfigureAwait(false);
@@ -237,11 +240,30 @@ public static class CookieRetriever
 
     private static string FindChromePath()
     {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
         var candidates = new[]
         {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+            // Chrome (Windows)
+            Path.Combine(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(localAppData, "Google", "Chrome", "Application", "chrome.exe"),
+            // Chromium (Windows)
+            Path.Combine(programFiles, "Chromium", "Application", "chrome.exe"),
+            Path.Combine(localAppData, "Chromium", "Application", "chrome.exe"),
+            // Chrome (Linux)
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            // Chromium (Linux)
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/snap/bin/chromium",
+            // Chrome (macOS)
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            // Chromium (macOS)
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
         };
         return candidates.FirstOrDefault(File.Exists) ?? "chrome";
     }
