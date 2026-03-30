@@ -66,13 +66,7 @@ public sealed class SipWssCallTransport : ICallTransport
     private int _prackCSeq;
     private bool _registered;
 
-    // IncomingCallReceived is never raised by this transport (GV SIP is outbound-only);
-    // explicit accessors suppress CA1030/unused-event warnings.
-    public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived
-    {
-        add { }
-        remove { }
-    }
+    public event EventHandler<IncomingCallEventArgs>? IncomingCallReceived;
 
     public event EventHandler<AudioDataEventArgs>? AudioReceived;
 
@@ -243,8 +237,13 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning restore CA1848, CA1873
             };
 
-            // Store session with peer connection
-            var session = new SipCallSession(callId) { PeerConnection = pc };
+            // Create Opus encoder for outbound audio (48kHz mono, VOIP application)
+#pragma warning disable CA2000 // Encoder lifetime managed by SipCallSession.Dispose
+            var opusEncoder = Concentus.OpusCodecFactory.CreateEncoder(48000, 1, Concentus.Enums.OpusApplication.OPUS_APPLICATION_VOIP);
+#pragma warning restore CA2000
+
+            // Store session with peer connection and encoder
+            var session = new SipCallSession(callId) { PeerConnection = pc, OpusEncoder = opusEncoder };
             _activeCalls[callId] = session;
 
             var offer = pc.createOffer();
@@ -342,10 +341,238 @@ public sealed class SipWssCallTransport : ICallTransport
 
     public void SendAudio(string callId, ReadOnlyMemory<byte> pcmData, int sampleRate)
     {
-        if (_activeCalls.TryGetValue(callId, out var session) && session.PeerConnection is not null)
+        if (!_activeCalls.TryGetValue(callId, out var session) ||
+            session.PeerConnection is null || session.OpusEncoder is null)
+            return;
+
+        // Convert byte[] PCM (16-bit LE) to short[] samples
+        var span = pcmData.Span;
+        var sampleCount = span.Length / 2;
+        if (sampleCount == 0) return;
+
+        var samples = new short[sampleCount];
+        for (int i = 0; i < sampleCount; i++)
         {
-            session.PeerConnection.SendAudio((uint)(pcmData.Length / 2), pcmData.ToArray());
+            samples[i] = (short)(span[i * 2] | (span[i * 2 + 1] << 8));
         }
+
+        // Encode to Opus — output buffer sized for max Opus frame
+        var opusOut = new byte[4000];
+#pragma warning disable CA1031
+        try
+        {
+            var encoded = session.OpusEncoder.Encode(
+                samples, sampleCount, opusOut, opusOut.Length);
+            if (encoded > 0)
+            {
+                // Duration in RTP timestamp units: sampleCount at 48kHz
+                session.PeerConnection.SendAudio(
+                    (uint)sampleCount, opusOut.AsSpan(0, encoded).ToArray());
+            }
+        }
+        catch
+        {
+            // Opus encode failure — skip frame silently
+        }
+#pragma warning restore CA1031
+    }
+
+    private void HandleIncomingInvite(string message)
+    {
+        var invCallId = ExtractHeaderValue(message, "Call-ID");
+        var invTo = ExtractHeader(message, "To");
+        var invFrom = ExtractHeader(message, "From");
+        var invVias = ExtractAllHeaders(message, "Via");
+        var invContact = ExtractHeader(message, "Contact");
+        var invCSeq = ExtractHeaderValue(message, "CSeq");
+        var recordRoutes = ExtractAllHeaders(message, "Record-Route");
+
+        // Extract caller number from From header: <sip:+1XXXXXXXXXX@domain>
+        var callerNumber = "unknown";
+        var fromUri = ExtractSipUri(invFrom ?? "");
+        if (fromUri.Contains("sip:", StringComparison.Ordinal))
+        {
+            var userPart = fromUri["sip:".Length..];
+            var atIdx = userPart.IndexOf('@', StringComparison.Ordinal);
+            if (atIdx > 0)
+                callerNumber = userPart[..atIdx];
+        }
+
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("Incoming INVITE from {Caller}, Call-ID={CallId}", callerNumber, invCallId);
+#pragma warning restore CA1848, CA1873
+
+        if (invCallId is null || invVias.Count == 0 || _wsChannel is null)
+            return;
+
+        // Send 180 Ringing
+        var ringing = "SIP/2.0 180 Ringing\r\n";
+        foreach (var via in invVias)
+            ringing += $"Via: {via}\r\n";
+        ringing +=
+            $"To: {invTo};tag={CallProperties.CreateNewTag()}\r\n" +
+            $"From: {invFrom}\r\n" +
+            $"Call-ID: {invCallId}\r\n" +
+            $"CSeq: {invCSeq}\r\n" +
+            $"Contact: <sip:{_regContactUser}@{_regWsHost};transport=wss>\r\n" +
+            $"User-Agent: {UserAgent}\r\n" +
+            $"Content-Length: 0\r\n" +
+            $"\r\n";
+        _ = _wsChannel.SendAsync(ringing);
+
+        // Create peer connection for incoming media
+        var pc = new RTCPeerConnection(new RTCConfiguration
+        {
+            iceServers = [new RTCIceServer { urls = "stun:stun.l.google.com:19302" }],
+            X_UseRsaForDtlsCertificate = true,
+            X_UseRtpFeedbackProfile = true,
+        });
+
+        var audioTrack = new MediaStreamTrack(
+            SDPMediaTypesEnum.audio, false,
+            new List<SDPAudioVideoMediaFormat>
+            {
+                new(new AudioFormat(AudioCodecsEnum.OPUS, 111, 48000, 2, "minptime=10;useinbandfec=1")),
+                new(SDPWellKnownMediaFormatsEnum.PCMU),
+            });
+        pc.addTrack(audioTrack);
+
+        // Set remote SDP from INVITE body
+        var sdpSep = message.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+        if (sdpSep >= 0)
+        {
+            var sdpBody = message[(sdpSep + 4)..].Trim();
+            if (sdpBody.StartsWith("v=", StringComparison.Ordinal))
+            {
+                pc.setRemoteDescription(new RTCSessionDescriptionInit
+                {
+                    type = RTCSdpType.offer,
+                    sdp = sdpBody,
+                });
+            }
+        }
+
+        var answer = pc.createAnswer();
+        pc.setLocalDescription(answer);
+
+        // Wire audio receive (same as outbound calls)
+        var rtpCount = 0;
+        const int inOpusChannels = 2;
+#pragma warning disable CA2000
+        var inDecoder = Concentus.OpusCodecFactory.CreateDecoder(48000, inOpusChannels);
+        var inEncoder = Concentus.OpusCodecFactory.CreateEncoder(48000, 1,
+            Concentus.Enums.OpusApplication.OPUS_APPLICATION_VOIP);
+#pragma warning restore CA2000
+
+        pc.OnRtpPacketReceived += (ep, mt, pkt) =>
+        {
+            if (mt != SDPMediaTypesEnum.audio || pkt.Header.PayloadType != 111) return;
+            rtpCount++;
+            var pcmBuf = new short[960 * inOpusChannels * 6];
+#pragma warning disable CA1031
+            try
+            {
+                var samples = inDecoder.Decode(pkt.Payload, pcmBuf.AsSpan(), 960);
+                if (samples > 0)
+                {
+                    var monoBytes = new byte[samples * 2];
+                    for (int i = 0; i < samples; i++)
+                    {
+                        int left = pcmBuf[i * inOpusChannels];
+                        int right = pcmBuf[i * inOpusChannels + 1];
+                        short mono = (short)((left + right) / 2);
+                        monoBytes[i * 2] = (byte)(mono & 0xFF);
+                        monoBytes[i * 2 + 1] = (byte)(mono >> 8);
+                    }
+                    AudioReceived?.Invoke(this, new AudioDataEventArgs(invCallId, monoBytes, 48000));
+                }
+            }
+            catch { /* decode error */ }
+#pragma warning restore CA1031
+        };
+
+        // Store session
+        var inSession = new SipCallSession(invCallId)
+        {
+            PeerConnection = pc,
+            OpusEncoder = inEncoder,
+            RemoteContactUri = ExtractSipUri(invContact ?? ""),
+            ToHeader = invTo,
+            FromHeader = invFrom,
+            RouteSet = [.. recordRoutes],
+            Status = CallStatusType.Active,
+        };
+        inSession.RouteSet.Reverse();
+        _activeCalls[invCallId] = inSession;
+
+        // Send 200 OK with SDP answer
+        var ok200 = "SIP/2.0 200 OK\r\n";
+        foreach (var via in invVias)
+            ok200 += $"Via: {via}\r\n";
+        ok200 +=
+            $"To: {invTo};tag={CallProperties.CreateNewTag()}\r\n" +
+            $"From: {invFrom}\r\n" +
+            $"Call-ID: {invCallId}\r\n" +
+            $"CSeq: {invCSeq}\r\n" +
+            $"Contact: <sip:{_regContactUser}@{_regWsHost};transport=wss>\r\n" +
+            $"Supported: timer\r\n" +
+            $"Session-Expires: 90;refresher=uac\r\n" +
+            $"User-Agent: {UserAgent}\r\n" +
+            $"Content-Type: application/sdp\r\n" +
+            $"Content-Length: {answer.sdp.Length}\r\n" +
+            $"\r\n" +
+            answer.sdp;
+
+        _ = _wsChannel.SendAsync(ok200);
+
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("Answered incoming call from {Caller}, Call-ID={CallId}", callerNumber, invCallId);
+#pragma warning restore CA1848, CA1873
+
+        // Fire event to UI
+        IncomingCallReceived?.Invoke(this, new IncomingCallEventArgs(
+            new IncomingCallInfo(invCallId, callerNumber)));
+    }
+
+    private void SendSessionRefresh(string callId)
+    {
+        if (_wsChannel is null || _credentials is null ||
+            !_activeCalls.TryGetValue(callId, out var session) ||
+            session.RemoteContactUri is null)
+            return;
+
+        var refreshCSeq = Interlocked.Increment(ref _prackCSeq);
+        var sipUsernameEncoded = Uri.EscapeDataString(_credentials.SipUsername);
+
+        var reInvite = $"INVITE {session.RemoteContactUri} SIP/2.0\r\n";
+
+        foreach (var route in session.RouteSet)
+        {
+            reInvite += $"Route: {route}\r\n";
+        }
+
+        reInvite +=
+            $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+            $"Max-Forwards: 69\r\n" +
+            $"To: {session.ToHeader}\r\n" +
+            $"From: {session.FromHeader}\r\n" +
+            $"Call-ID: {callId}\r\n" +
+            $"CSeq: {refreshCSeq} INVITE\r\n" +
+            $"Contact: <sip:{_regContactUser}@{_regWsHost};transport=wss>\r\n" +
+            $"Session-Expires: 90;refresher=uac\r\n" +
+            $"Supported: timer\r\n" +
+            $"User-Agent: {UserAgent}\r\n" +
+            $"Content-Type: application/sdp\r\n";
+
+        // Re-INVITE needs SDP — use current local description
+        var sdp = session.PeerConnection?.localDescription?.sdp?.ToString() ?? "";
+        reInvite += $"Content-Length: {sdp.Length}\r\n\r\n{sdp}";
+
+#pragma warning disable CA1848, CA1873
+        _logger.LogInformation("Sending session refresh re-INVITE for call {CallId}", callId);
+#pragma warning restore CA1848, CA1873
+
+        _ = _wsChannel.SendAsync(reInvite);
     }
 
     private async Task RegisterAsync(CancellationToken ct)
@@ -600,6 +827,34 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning restore CA1848, CA1873
 
                             _ = _wsChannel!.SendAsync(ack);
+
+                            // Session timer: parse Session-Expires and schedule re-INVITE
+                            if (callIdValue is not null &&
+                                _activeCalls.TryGetValue(callIdValue, out var timerSession))
+                            {
+                                var sessionExpires = ExtractHeaderValue(message, "Session-Expires");
+                                if (sessionExpires is not null)
+                                {
+                                    // Parse "90;refresher=uac" → 90 seconds
+                                    var seParts = sessionExpires.Split(';');
+                                    if (int.TryParse(seParts[0].Trim(), System.Globalization.NumberStyles.Integer,
+                                        System.Globalization.CultureInfo.InvariantCulture, out var seSeconds) && seSeconds > 0)
+                                    {
+                                        // Refresh at half the interval (standard practice)
+                                        var refreshMs = (seSeconds / 2) * 1000;
+                                        var capturedCallId = callIdValue;
+#pragma warning disable CA1848, CA1873
+                                        _logger.LogInformation(
+                                            "Session timer: {Seconds}s, refreshing every {RefreshSec}s",
+                                            seSeconds, seSeconds / 2);
+#pragma warning restore CA1848, CA1873
+
+                                        timerSession.SessionTimer = new Timer(
+                                            _ => SendSessionRefresh(capturedCallId),
+                                            null, refreshMs, refreshMs);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -618,18 +873,23 @@ public sealed class SipWssCallTransport : ICallTransport
                 var byeCallId = ExtractHeaderValue(message, "Call-ID");
                 var byeToHeader = ExtractHeader(message, "To");
                 var byeFromHeader = ExtractHeader(message, "From");
-                var byeVia = ExtractHeader(message, "Via");
+                var byeVias = ExtractAllHeaders(message, "Via"); // ALL Via headers for proper routing
                 var byeCSeq = ExtractHeaderValue(message, "CSeq");
 
 #pragma warning disable CA1848, CA1873
-                _logger.LogInformation("Received BYE for call {CallId} — sending 200 OK", byeCallId);
+                _logger.LogInformation("Received BYE for call {CallId} ({ViaCount} Via headers) — sending 200 OK",
+                    byeCallId, byeVias.Count);
 #pragma warning restore CA1848, CA1873
 
-                // Send 200 OK response to BYE
-                if (byeCallId is not null && byeVia is not null)
+                // Send 200 OK response to BYE — must echo ALL Via headers for correct routing
+                if (byeCallId is not null && byeVias.Count > 0)
                 {
-                    var byeOk = $"SIP/2.0 200 OK\r\n" +
-                        $"Via: {byeVia}\r\n" +
+                    var byeOk = "SIP/2.0 200 OK\r\n";
+                    foreach (var via in byeVias)
+                    {
+                        byeOk += $"Via: {via}\r\n";
+                    }
+                    byeOk +=
                         $"To: {byeToHeader}\r\n" +
                         $"From: {byeFromHeader}\r\n" +
                         $"Call-ID: {byeCallId}\r\n" +
@@ -639,7 +899,7 @@ public sealed class SipWssCallTransport : ICallTransport
 
                     _ = _wsChannel!.SendAsync(byeOk);
 
-                    // Clean up the call session
+                    // Clean up the call session (only on first BYE, ignore retransmissions)
 #pragma warning disable CA2000
                     if (_activeCalls.TryRemove(byeCallId, out var byeSession))
 #pragma warning restore CA2000
@@ -649,6 +909,10 @@ public sealed class SipWssCallTransport : ICallTransport
                         LogCallEnded(_logger, byeCallId, null);
                     }
                 }
+            }
+            else if (message.StartsWith("INVITE ", StringComparison.Ordinal))
+            {
+                HandleIncomingInvite(message);
             }
         };
 
@@ -801,6 +1065,7 @@ internal sealed class SipCallSession : IDisposable
 {
     public string CallId { get; }
     public SIPSorcery.Net.RTCPeerConnection? PeerConnection { get; set; }
+    public Concentus.IOpusEncoder? OpusEncoder { get; set; }
     public CallStatusType Status { get; set; } = CallStatusType.Unknown;
 
     // Dialog state for BYE
@@ -809,6 +1074,9 @@ internal sealed class SipCallSession : IDisposable
     public string? FromHeader { get; set; }
     public List<string> RouteSet { get; set; } = [];
 
+    // Session timer
+    public Timer? SessionTimer { get; set; }
+
     public SipCallSession(string callId)
     {
         CallId = callId;
@@ -816,6 +1084,8 @@ internal sealed class SipCallSession : IDisposable
 
     public void Dispose()
     {
+        SessionTimer?.Dispose();
+        (OpusEncoder as IDisposable)?.Dispose();
         PeerConnection?.close();
     }
 }
