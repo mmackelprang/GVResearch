@@ -47,8 +47,18 @@ public sealed class GvPhoneClient : IAsyncDisposable
         if (!_signalerConnected)
         {
             StatusChanged?.Invoke(this, new StringEventArgs("Connecting signaler..."));
-            await _signaler.ConnectAsync(ct).ConfigureAwait(false);
-            _signalerConnected = true;
+            try
+            {
+                await _signaler.ConnectAsync(ct).ConfigureAwait(false);
+                _signalerConnected = true;
+            }
+#pragma warning disable CA1031 // Signaler failure is non-fatal — calls use SIP, not signaler
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                StatusChanged?.Invoke(this, new StringEventArgs($"Signaler failed (non-fatal): {ex.Message}"));
+                // Calls work via SIP-over-WebSocket, not the signaler
+            }
         }
 
         StatusChanged?.Invoke(this, new StringEventArgs($"Calling {destination}..."));

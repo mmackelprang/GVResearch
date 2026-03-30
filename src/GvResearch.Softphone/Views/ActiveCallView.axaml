@@ -3,32 +3,39 @@
              xmlns:vm="using:GvResearch.Softphone.ViewModels"
              x:Class="GvResearch.Softphone.Views.ActiveCallView"
              x:DataType="vm:ActiveCallViewModel">
-    <StackPanel Spacing="12" Margin="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <StackPanel Margin="16" Spacing="0" VerticalAlignment="Bottom">
         <!-- Remote number -->
         <TextBlock Text="{Binding RemoteNumber}"
                    FontSize="28"
                    FontWeight="Bold"
-                   HorizontalAlignment="Center" />
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,4" />
 
         <!-- Call status -->
         <TextBlock Text="{Binding CallStatus}"
                    FontSize="16"
                    HorizontalAlignment="Center"
-                   Foreground="#888888" />
+                   Foreground="#888888"
+                   Margin="0,0,0,8" />
 
         <!-- Duration timer -->
         <TextBlock Text="{Binding CallDuration}"
                    FontSize="20"
-                   HorizontalAlignment="Center" />
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,16" />
 
         <!-- Mute / Hangup buttons -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
             <Button Content="{Binding MuteButtonText}"
                     Command="{Binding ToggleMuteCommand}"
-                    Width="100" Height="50" />
+                    Width="120" Height="50"
+                    HorizontalContentAlignment="Center"
+                    FontSize="16" />
             <Button Content="Hangup"
                     Command="{Binding HangupCommand}"
-                    Width="100" Height="50"
+                    Width="120" Height="50"
+                    HorizontalContentAlignment="Center"
+                    FontSize="16"
                     Background="#CC0000" Foreground="White" />
         </StackPanel>
     </StackPanel>
