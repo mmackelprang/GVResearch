@@ -223,6 +223,9 @@ public sealed class SipWssCallTransport : ICallTransport
 
         var regTcs = new TaskCompletionSource<bool>();
 
+        // Track PRACKed RSeq values to avoid re-PRACKing retransmissions
+        var prackedRSeqs = new HashSet<string>(StringComparer.Ordinal);
+
         // These are shared between the event handler and the REGISTER below
         var regCallId = Guid.NewGuid().ToString("N")[..22];
         var regTag = CallProperties.CreateNewTag();
@@ -327,10 +330,9 @@ public sealed class SipWssCallTransport : ICallTransport
                             // Extract Record-Route headers (reversed for Route in requests)
                             var recordRoutes = ExtractAllHeaders(message, "Record-Route");
 
-                            if (rseqValue is not null && contactUri is not null)
+                            if (rseqValue is not null && contactUri is not null
+                                && prackedRSeqs.Add(rseqValue)) // Only PRACK each RSeq once
                             {
-                                // Extract the full SIP URI from Contact: <uri>
-                                // Keep ALL URI params (port, transport, uri-econt)
                                 var contactSipUri = ExtractSipUri(contactUri);
 
                                 // Build PRACK with Record-Route → Route
@@ -355,8 +357,8 @@ public sealed class SipWssCallTransport : ICallTransport
                                     $"\r\n";
 
 #pragma warning disable CA1848, CA1873
-                                _logger.LogInformation("Sending PRACK for {Status} (RSeq={RSeq}) to {Uri}",
-                                    statusCode, rseqValue, contactSipUri[..Math.Min(80, contactSipUri.Length)]);
+                                _logger.LogInformation("Sending PRACK for {Status} (RSeq={RSeq}) to {Uri}\nPRACK body:\n{Prack}",
+                                    statusCode, rseqValue, contactSipUri, prack[..Math.Min(500, prack.Length)]);
 #pragma warning restore CA1848, CA1873
 
                                 _ = _wsChannel!.SendAsync(prack);

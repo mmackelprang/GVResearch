@@ -72,6 +72,7 @@ public sealed class GvSipWebSocketChannel : IDisposable
             throw new InvalidOperationException("WebSocket not connected");
 
         var bytes = Encoding.UTF8.GetBytes(sipMessage);
+        // RFC 7118 allows Text or Binary — use Text for requests (matching browser TsSIP)
         await _ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
     }
 
