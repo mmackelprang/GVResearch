@@ -15,6 +15,9 @@ internal sealed class Program
     public static ServiceProvider? Services { get; private set; }
     public static string? AutoDialNumber { get; private set; }
 
+    private static readonly string LogDir = Path.Combine("D:", "prj", "GVResearch", "logs");
+    private static readonly string LogFile = Path.Combine(LogDir, "softphone.log");
+
     [STAThread]
     public static void Main(string[] args)
     {
@@ -28,8 +31,24 @@ internal sealed class Program
             .AddEnvironmentVariables()
             .Build();
 
+        var cookiePath = config["GvResearch:CookiePath"] ?? "cookies.enc";
+        var keyPath = config["GvResearch:KeyPath"] ?? "key.bin";
+
+        // Cookie retrieval is now handled automatically by GvAuthService.GetValidCookiesAsync:
+        // - If cookies.enc exists and is valid → uses cached cookies
+        // - If cookies.enc is expired (account/get returns 401) → auto-refreshes from Chrome
+        // - If cookies.enc is missing → auto-retrieves from Chrome via CDP
+
         var serviceCollection = new ServiceCollection();
-        serviceCollection.AddLogging(b => b.AddConsole());
+
+        // File + console logging
+        Directory.CreateDirectory(LogDir);
+        serviceCollection.AddLogging(b =>
+        {
+            b.AddConsole();
+            b.AddProvider(new FileLoggerProvider(LogFile));
+            b.SetMinimumLevel(LogLevel.Debug);
+        });
 
         // Register signaler for push notifications
         serviceCollection.AddSingleton<IGvSignalerClient, GvSignalerClient>();
@@ -39,12 +58,13 @@ internal sealed class Program
         serviceCollection.AddSingleton<ICallTransport>(sp =>
             new SipWssCallTransport(
                 sp.GetRequiredService<ILogger<SipWssCallTransport>>(),
-                () => sp.GetRequiredService<GvSipCredentialProvider>().GetCredentialsAsync()));
+                () => sp.GetRequiredService<GvSipCredentialProvider>().GetCredentialsAsync(),
+                sp.GetRequiredService<ILoggerFactory>()));
 
         serviceCollection.AddGvClient(options =>
         {
-            options.CookiePath = config["GvResearch:CookiePath"] ?? "cookies.enc";
-            options.KeyPath = config["GvResearch:KeyPath"] ?? "key.bin";
+            options.CookiePath = cookiePath;
+            options.KeyPath = keyPath;
             options.ApiKey = config["GvResearch:ApiKey"] ?? string.Empty;
         });
 
@@ -52,6 +72,8 @@ internal sealed class Program
         serviceCollection.AddSingleton<GvPhoneClient>();
 
         Services = serviceCollection.BuildServiceProvider();
+
+        Console.WriteLine($"Logs: {LogFile}");
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

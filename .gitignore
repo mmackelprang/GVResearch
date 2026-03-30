@@ -35,6 +35,9 @@ coverage/
 *.db-journal
 *.db-wal
 
+## Logs
+logs/
+
 ## OS
 Thumbs.db
 .DS_Store
