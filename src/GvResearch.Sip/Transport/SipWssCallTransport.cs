@@ -119,7 +119,8 @@ public sealed class SipWssCallTransport : ICallTransport
 
             var pc = new SIPSorcery.Net.RTCPeerConnection(new SIPSorcery.Net.RTCConfiguration
             {
-                iceServers = [new SIPSorcery.Net.RTCIceServer { urls = "stun:stun.l.google.com:19302" }]
+                iceServers = [new SIPSorcery.Net.RTCIceServer { urls = "stun:stun.l.google.com:19302" }],
+                X_UseRsaForDtlsCertificate = false, // Use ECDSA — Google requires ECDSA cipher suites
             });
 
             var audioTrack = new MediaStreamTrack(
