@@ -144,10 +144,10 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning disable CA2000 // Opus decoder lifetime managed by call session
             var opusDecoder = Concentus.OpusCodecFactory.CreateDecoder(48000, opusChannels);
 #pragma warning restore CA2000
-            var pcmBuf = new short[maxFrameSamples * 6]; // room for up to 120ms frames
-
             pc.OnRtpPacketReceived += (ep, mt, pkt) =>
             {
+                // Allocate per-invocation to avoid cross-thread sharing (~23KB, acceptable)
+                var pcmBuf = new short[maxFrameSamples * 6]; // room for up to 120ms frames
                 rtpCount++;
                 if (rtpCount <= 5 || rtpCount % 500 == 0)
                 {
@@ -208,6 +208,7 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning disable CA1848, CA1873
                 _logger.LogInformation("Call {CallId} ICE: {State}", callId, state);
 
+#if DEBUG
                 // Diagnostic: dump DTLS configuration via reflection when ICE connects
                 if (state == SIPSorcery.Net.RTCIceConnectionState.connected)
                 {
@@ -232,6 +233,7 @@ public sealed class SipWssCallTransport : ICallTransport
                     }
 #pragma warning restore CA1031
                 }
+#endif
 #pragma warning restore CA1848, CA1873
             };
             pc.onsignalingstatechange += () =>

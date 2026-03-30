@@ -21,11 +21,13 @@ public sealed class GvHttpClientHandler : DelegatingHandler
 
         var response = await SendWithAuthAsync(request, cancellationToken).ConfigureAwait(false);
 
-        // If 401, cookies may have expired — refresh and retry once
+        // If 401, cookies may have expired — refresh and retry once.
+        // Clone the request because HttpRequestMessage cannot be sent twice.
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             await _authService.RefreshCookiesAsync(cancellationToken).ConfigureAwait(false);
-            response = await SendWithAuthAsync(request, cancellationToken).ConfigureAwait(false);
+            using var retryRequest = CloneHttpRequestMessage(request);
+            response = await SendWithAuthAsync(retryRequest, cancellationToken).ConfigureAwait(false);
         }
 
         return response;
@@ -51,5 +53,33 @@ public sealed class GvHttpClientHandler : DelegatingHandler
         request.Headers.Add("Referer", "https://voice.google.com/");
 
         return await base.SendAsync(request, ct).ConfigureAwait(false);
+    }
+
+    private static HttpRequestMessage CloneHttpRequestMessage(HttpRequestMessage original)
+    {
+        var clone = new HttpRequestMessage(original.Method, original.RequestUri);
+
+        // Copy content (if any)
+        if (original.Content is not null)
+        {
+            // Read the content synchronously — it has already been buffered by the first send
+            var contentBytes = original.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            var newContent = new ByteArrayContent(contentBytes);
+
+            foreach (var header in original.Content.Headers)
+            {
+                newContent.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            clone.Content = newContent;
+        }
+
+        // Copy request headers (auth headers will be replaced by SendWithAuthAsync)
+        foreach (var header in original.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        return clone;
     }
 }

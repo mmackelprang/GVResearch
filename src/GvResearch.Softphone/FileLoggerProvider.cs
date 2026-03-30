@@ -8,13 +8,11 @@ namespace GvResearch.Softphone;
 /// </summary>
 internal sealed class FileLoggerProvider : ILoggerProvider
 {
-    private readonly string _filePath;
     private readonly StreamWriter _writer;
     private readonly object _lock = new();
 
     public FileLoggerProvider(string filePath)
     {
-        _filePath = filePath;
         // Overwrite on each run so the file always has the latest session
         _writer = new StreamWriter(filePath, append: false) { AutoFlush = true };
         _writer.WriteLine($"=== GVResearch Softphone log — {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");

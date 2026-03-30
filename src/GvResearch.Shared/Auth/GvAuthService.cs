@@ -83,7 +83,15 @@ public sealed class GvAuthService : IGvAuthService, IDisposable
 
     public async Task LoginInteractiveAsync(CancellationToken ct = default)
     {
-        await RetrieveFreshCookiesAsync(ct).ConfigureAwait(false);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await RetrieveFreshCookiesAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task RefreshCookiesAsync(CancellationToken ct = default)
@@ -147,7 +155,7 @@ public sealed class GvAuthService : IGvAuthService, IDisposable
         var hash = Convert.ToHexStringLower(
             SHA1.HashData(Encoding.UTF8.GetBytes(input)));
 #pragma warning restore CA5350
-        var auth = $"SAPISIDHASH {ts}_{hash}";
+        var auth = $"SAPISIDHASH {ts}_{hash} SAPISID1PHASH {ts}_{hash} SAPISID3PHASH {ts}_{hash}";
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
             "https://clients6.google.com/voice/v1/voiceclient/account/get?alt=protojson&key=AIzaSyDTYc1N4xiODyrQYK0Kl6g_y279LjYkrBg");

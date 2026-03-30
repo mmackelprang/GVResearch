@@ -15,7 +15,7 @@ internal sealed class Program
     public static ServiceProvider? Services { get; private set; }
     public static string? AutoDialNumber { get; private set; }
 
-    private static readonly string LogDir = Path.Combine("D:", "prj", "GVResearch", "logs");
+    private static readonly string LogDir = Path.Combine(AppContext.BaseDirectory, "logs");
     private static readonly string LogFile = Path.Combine(LogDir, "softphone.log");
 
     [STAThread]
