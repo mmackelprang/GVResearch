@@ -44,10 +44,24 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 - Cookie lifetimes: SAPISID/SID ~13 months, COMPASS ~10 days, `__Secure-*PSIDRTS` rotates daily
 - See `docs/api-research/headless-integration-guide.md` for the full auth flow
 
+### Environment Setup (REQUIRED)
+
+The GV API key must be set as an environment variable before running any project:
+
+```powershell
+# Windows (run once — persists across sessions):
+.\setup-env.ps1
+
+# Linux/macOS:
+source ./setup-env.sh
+```
+
+This sets `GvResearch__ApiKey` which .NET configuration binds to `GvResearch:ApiKey`. The key is Google's public browser-scoped Voice API key — not a secret, but kept out of source to avoid GitGuardian flags.
+
 ### API Protocol
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`
 - **Format:** Protobuf serialized as JSON arrays (`application/json+protobuf` with `alt=protojson`)
-- **API Key:** `{GV_API_KEY}` (public, scoped to Voice)
+- **API Key:** Set via `GvResearch__ApiKey` env var (see Environment Setup above)
 - Responses are **nested arrays, not objects** — field position is determined by .proto schema
 
 ### SDK Architecture (IGvClient)
@@ -202,7 +216,7 @@ Full call flow verified end-to-end with real phone call + audio:
 - .NET 10, C# 13, nullable enabled, TreatWarningsAsErrors
 - xUnit + FluentAssertions for testing
 - Microsoft.Extensions.Logging (console + file) — softphone logs to `D:/prj/GVResearch/logs/softphone.log`
-- No sensitive data in source (tokens encrypted at rest, .gitignore covers captures)
+- No sensitive data in source (tokens encrypted at rest, API key via env var, .gitignore covers captures/logs)
 - Rate limits: 10 req/min, 100 req/day per endpoint (enforced by `GvRateLimiter`)
 - `--allow-destructive` flag required for delete operations
 
