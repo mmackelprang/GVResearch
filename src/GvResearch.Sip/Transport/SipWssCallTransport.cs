@@ -144,6 +144,27 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning restore CA1848, CA1873
             };
 
+            pc.oniceconnectionstatechange += (state) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} ICE connection: {State}", callId, state);
+#pragma warning restore CA1848, CA1873
+            };
+
+            pc.onicegatheringstatechange += (state) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} ICE gathering: {State}", callId, state);
+#pragma warning restore CA1848, CA1873
+            };
+
+            pc.onicecandidate += (candidate) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} ICE candidate: {Candidate}", callId, candidate);
+#pragma warning restore CA1848, CA1873
+            };
+
             // Store session with peer connection
             var session = new SipCallSession(callId) { PeerConnection = pc };
             _activeCalls[callId] = session;
