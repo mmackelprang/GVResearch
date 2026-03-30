@@ -110,36 +110,64 @@ public sealed class SipWssCallTransport : ICallTransport
 
         try
         {
-            // Use VoIPMediaSession — designed for SIP calls, handles SRTP without full WebRTC stack
-            var mediaSession = new SIPSorcery.Media.VoIPMediaSession();
-            mediaSession.AcceptRtpFromAny = true;
+            // Create RTCPeerConnection for DTLS-SRTP (required by Google)
+            // Enable SIPSorcery internal debug logging for DTLS troubleshooting
+#pragma warning disable CA2000 // LoggerFactory lifetime managed by SIPSorcery.LogFactory
+            SIPSorcery.LogFactory.Set(Microsoft.Extensions.Logging.LoggerFactory.Create(
+                builder => builder.SetMinimumLevel(LogLevel.Debug).AddConsole()));
+#pragma warning restore CA2000
+
+            var pc = new SIPSorcery.Net.RTCPeerConnection(new SIPSorcery.Net.RTCConfiguration
+            {
+                iceServers = [new SIPSorcery.Net.RTCIceServer { urls = "stun:stun.l.google.com:19302" }]
+            });
+
+            var audioTrack = new MediaStreamTrack(
+                SDPMediaTypesEnum.audio, false,
+                new List<SDPAudioVideoMediaFormat>
+                {
+                    new(new AudioFormat(AudioCodecsEnum.OPUS, 111, 48000, 2, "minptime=10;useinbandfec=1")),
+                    new(SDPWellKnownMediaFormatsEnum.G722),
+                    new(SDPWellKnownMediaFormatsEnum.PCMU),
+                    new(SDPWellKnownMediaFormatsEnum.PCMA),
+                });
+            pc.addTrack(audioTrack);
 
             // Wire audio receive events
-            mediaSession.OnRtpPacketReceived += (ep, mt, pkt) =>
+            pc.OnRtpPacketReceived += (ep, mt, pkt) =>
             {
                 if (mt == SDPMediaTypesEnum.audio)
                 {
                     AudioReceived?.Invoke(this, new AudioDataEventArgs(callId, pkt.Payload, 48000));
-#pragma warning disable CA1848, CA1873
-                    _logger.LogDebug("Audio packet received: {Len} bytes from {Ep}", pkt.Payload.Length, ep);
-#pragma warning restore CA1848, CA1873
                 }
             };
 
-            // Log media session events
-            mediaSession.OnRtpEvent += (ep, evt, hdr) =>
+            // Log ALL state changes for DTLS debugging
+            pc.onconnectionstatechange += (state) =>
             {
 #pragma warning disable CA1848, CA1873
-                _logger.LogInformation("Call {CallId} RTP event: {Evt}", callId, evt);
+                _logger.LogInformation("Call {CallId} connection: {State}", callId, state);
+#pragma warning restore CA1848, CA1873
+            };
+            pc.oniceconnectionstatechange += (state) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} ICE: {State}", callId, state);
+#pragma warning restore CA1848, CA1873
+            };
+            pc.onsignalingstatechange += () =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} signaling: {State}", callId, pc.signalingState);
 #pragma warning restore CA1848, CA1873
             };
 
-            // Store session
-            var session = new SipCallSession(callId) { MediaSession = mediaSession };
+            // Store session with peer connection
+            var session = new SipCallSession(callId) { PeerConnection = pc };
             _activeCalls[callId] = session;
 
-            // Create SDP offer from the media session
-            var offerSdp = mediaSession.CreateOffer(null);
+            var offer = pc.createOffer();
+            await pc.setLocalDescription(offer).ConfigureAwait(false);
 
             // Use a random CSeq like the browser does
             _inviteCSeq = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1000, 9999);
@@ -163,12 +191,12 @@ public sealed class SipWssCallTransport : ICallTransport
                 $"X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w\r\n" +
                 (_serviceRoute is not null ? $"Route: {_serviceRoute}\r\n" : "") +
                 $"Max-Forwards: 70\r\n" +
-                $"Content-Length: {offerSdp.ToString().Length}\r\n" +
+                $"Content-Length: {offer.sdp.Length}\r\n" +
                 $"\r\n" +
-                offerSdp.ToString();
+                offer.sdp;
 
 #pragma warning disable CA1848, CA1873 // Debug/UAT tool — LoggerMessage perf not required
-            _logger.LogInformation("Sending SIP INVITE to {Number}, SDP={SdpLen} chars", destNumber, offerSdp.ToString().Length);
+            _logger.LogInformation("Sending SIP INVITE to {Number}, SDP={SdpLen} chars", destNumber, offer.sdp.Length);
 #pragma warning restore CA1848, CA1873
 
             await _wsChannel.SendAsync(inviteMsg, ct).ConfigureAwait(false);
@@ -233,9 +261,9 @@ public sealed class SipWssCallTransport : ICallTransport
 
     public void SendAudio(string callId, ReadOnlyMemory<byte> pcmData, int sampleRate)
     {
-        if (_activeCalls.TryGetValue(callId, out var session) && session.MediaSession is not null)
+        if (_activeCalls.TryGetValue(callId, out var session) && session.PeerConnection is not null)
         {
-            session.MediaSession.SendAudio((uint)(pcmData.Length / 2), pcmData.ToArray());
+            session.PeerConnection.SendAudio((uint)(pcmData.Length / 2), pcmData.ToArray());
         }
     }
 
@@ -362,39 +390,21 @@ public sealed class SipWssCallTransport : ICallTransport
                                         var inviteCallId = ExtractHeaderValue(message, "Call-ID");
                                         if (inviteCallId is not null &&
                                             _activeCalls.TryGetValue(inviteCallId, out var callSession) &&
-                                            callSession.MediaSession is not null)
+                                            callSession.PeerConnection is not null)
                                         {
-                                            // Parse the remote SDP and set it on the media session
-                                            var remoteSdp = SDP.ParseSDPDescription(sdpBody);
-                                            var setResult = callSession.MediaSession.SetRemoteDescription(
-                                                SIPSorcery.SIP.App.SdpType.answer, remoteSdp);
+                                            var answer = new SIPSorcery.Net.RTCSessionDescriptionInit
+                                            {
+                                                type = SIPSorcery.Net.RTCSdpType.answer,
+                                                sdp = sdpBody,
+                                            };
+                                            var setResult = callSession.PeerConnection.setRemoteDescription(answer);
 #pragma warning disable CA1848, CA1873
                                             _logger.LogInformation(
-                                                "Set remote SDP from 183: {Result}", setResult);
+                                                "Set remote SDP from 183: {Result}, ICE={Ice}, conn={Conn}",
+                                                setResult,
+                                                callSession.PeerConnection.iceConnectionState,
+                                                callSession.PeerConnection.connectionState);
 #pragma warning restore CA1848, CA1873
-
-                                            // Start the media session (begins RTP/SRTP)
-                                            if (setResult == SetDescriptionResultEnum.OK)
-                                            {
-                                                _ = Task.Run(async () =>
-                                                {
-                                                    try
-                                                    {
-                                                        await callSession.MediaSession.Start().ConfigureAwait(false);
-#pragma warning disable CA1848, CA1873
-                                                        _logger.LogInformation("Media session started — audio should be flowing!");
-#pragma warning restore CA1848, CA1873
-                                                    }
-#pragma warning disable CA1031
-                                                    catch (Exception ex)
-#pragma warning restore CA1031
-                                                    {
-#pragma warning disable CA1848, CA1873
-                                                        _logger.LogError(ex, "Media session start failed");
-#pragma warning restore CA1848, CA1873
-                                                    }
-                                                });
-                                            }
                                         }
                                     }
                                 }
@@ -665,7 +675,7 @@ public sealed record SipCredentials(
 internal sealed class SipCallSession : IDisposable
 {
     public string CallId { get; }
-    public SIPSorcery.Media.VoIPMediaSession? MediaSession { get; set; }
+    public SIPSorcery.Net.RTCPeerConnection? PeerConnection { get; set; }
     public CallStatusType Status { get; set; } = CallStatusType.Unknown;
 
     // Dialog state for BYE
@@ -681,7 +691,7 @@ internal sealed class SipCallSession : IDisposable
 
     public void Dispose()
     {
-        MediaSession?.Close("call ended");
+        PeerConnection?.close();
     }
 }
 #pragma warning restore CA1812
