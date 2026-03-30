@@ -136,36 +136,43 @@ Real VoIP calls working end-to-end:
 - `GvSipCredentialProvider` fetches credentials from `sipregisterinfo/get`
 - Full flow: REGISTER → 401 → Digest → 200 OK → INVITE → 100 → 183 → PRACK → 180 → PRACK → 200 → ACK → **phone rings**
 
+### Call Signaling Status (COMPLETE — verified 2026-03-29)
+
+Full SIP call flow verified end-to-end with real phone call:
+- REGISTER → 401 → Digest → 200 OK ✅
+- INVITE → 100 Trying ✅
+- 183 Session Progress (SDP answer) → PRACK → 200 OK ✅
+- 180 Ringing → PRACK → 200 OK ✅ — **phone rings!**
+- 200 OK (INVITE) → ACK → **call connected** ✅
+- Remote BYE received → 200 OK ✅
+- Our BYE sent → 200 OK ✅
+
 ### What Still Needs to Be Built
-1. **Audio pipeline (end-to-end)** — SDP answer from 183 contains Google's media endpoint. Need to: (a) parse SDP from 183 response, (b) establish DTLS-SRTP to Google's media relay at `74.125.39.x:26500`, (c) negotiate Opus codec, (d) wire NAudio mic/speaker to RTP stream. See audio plan below.
-2. **Incoming call support** — Listen for SIP INVITE on the WebSocket, auto-answer or surface to UI
-3. **`LoginInteractiveAsync()`** — Integrate cookie CLI into `GvAuthService` so it auto-triggers on 401
-4. **`TryRefreshSessionAsync()`** — Health check via `threadinginfo/get` + cookie refresh cascade
-5. **BYE handling** — Send SIP BYE on hangup, handle remote BYE
-6. **Session timer refresh** — Re-INVITE every 90 seconds (session timer from 200 OK)
-7. **Voicemail service** — List, play (signed URL), delete, transcription access
+1. **DTLS-SRTP media establishment** — ICE connects (`checking → connected`) but DTLS handshake fails (`connecting → failed`). SIPSorcery's `RTCPeerConnection` may not handle Google's `ice-lite` + `setup:passive` correctly. May need to use SIPSorcery's lower-level `RTPSession` + manual DTLS, or debug the peer connection's DTLS implementation.
+2. **Audio codec wiring** — Once DTLS works, Opus decode/encode + NAudio mic/speaker integration
+3. **Incoming call support** — Listen for SIP INVITE on the WebSocket, auto-answer or surface to UI
+4. **BYE response** — Handle incoming BYE (currently retransmitted because we don't send 200 OK for BYE)
+5. **Session timer refresh** — Re-INVITE every 90 seconds
+6. **`LoginInteractiveAsync()`** — Integrate cookie CLI into `GvAuthService` for auto-refresh on 401
+7. **Voicemail service** — List, play, delete, transcription
 
-### Audio Pipeline Plan
+### Audio Pipeline Status (IN PROGRESS)
 
-The SDP answer in the 183 Session Progress contains Google's media endpoint:
+SDP from 183 is set on RTCPeerConnection. ICE connectivity check **succeeds** (`connected`). DTLS handshake **fails** (`connecting → closed → failed`).
+
+**Debug data from last test:**
 ```
-o=xavier ... IN IP4 74.125.39.159
-m=audio 26500 UDP/TLS/RTP/SAVPF 111 110
-a=rtpmap:111 opus/48000/2
-a=candidate:1 1 UDP 1 74.125.39.159 26500 typ host
-a=ice-lite
-a=setup:passive
-a=fingerprint:sha-256 ...
+ICE connection: checking → connected   ← ICE can reach 74.125.39.x:26500
+peer connection: connecting             ← DTLS handshake attempted
+peer connection: closed                 ← DTLS failed
+peer connection: failed                 ← Connection abandoned
 ```
 
-**What needs to happen for audio:**
-1. Parse SDP from 183 response body (already received but not processed)
-2. Create `RTCPeerConnection` with the SDP answer (SIPSorcery handles DTLS-SRTP)
-3. Set local SDP (from our INVITE offer) and remote SDP (from 183 answer)
-4. ICE connectivity check to `74.125.39.159:26500` (Google uses `ice-lite` — fixed endpoint)
-5. DTLS handshake (Google is `setup:passive`, we are `setup:actpass`)
-6. Opus audio flows over SRTP
-7. Wire `AudioEngine` (NAudio) to send/receive decoded PCM audio
+**Likely causes:**
+- SIPSorcery DTLS client may not support `setup:passive` (Google expects us to initiate DTLS)
+- The DTLS fingerprint from the SDP may not be verified correctly
+- Possible issue with SIPSorcery's DTLS implementation for `ice-lite` peers
+- May need to use `RTPSession` directly with manual DTLS-SRTP setup instead of `RTCPeerConnection`
 8. Handle SDP renegotiation (~6 seconds after incoming call connects)
 5. **Voicemail service** — List, play (signed URL), delete, transcription access
 6. **Opus codec support** — Replace G.711 fallback with native Opus for better audio quality (requires native lib or managed Opus decoder)
