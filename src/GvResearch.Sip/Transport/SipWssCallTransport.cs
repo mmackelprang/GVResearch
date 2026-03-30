@@ -74,24 +74,24 @@ public sealed class SipWssCallTransport : ICallTransport
         remove { }
     }
 
-    // AudioReceived is part of ICallTransport; not yet wired to RTP receive path.
-    // Explicit accessors suppress CS0067 (event never used).
-    public event EventHandler<AudioDataEventArgs>? AudioReceived
-    {
-        add { }
-        remove { }
-    }
+    public event EventHandler<AudioDataEventArgs>? AudioReceived;
 
     /// <param name="logger">Logger</param>
     /// <param name="getCredentials">Async factory that calls sipregisterinfo/get and returns credentials</param>
+    /// <param name="loggerFactory">Optional ILoggerFactory to route SIPSorcery internal logs through</param>
     public SipWssCallTransport(
         ILogger<SipWssCallTransport> logger,
-        Func<Task<SipCredentials>> getCredentials)
+        Func<Task<SipCredentials>> getCredentials,
+        ILoggerFactory? loggerFactory = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(getCredentials);
         _logger = logger;
         _getCredentials = getCredentials;
+
+        // Route SIPSorcery internal logs (including DTLS diagnostics) through our logging pipeline
+        if (loggerFactory is not null)
+            SIPSorcery.LogFactory.Set(loggerFactory);
     }
 
     public async Task<TransportCallResult> InitiateAsync(string toNumber, CancellationToken ct = default)
@@ -116,10 +116,13 @@ public sealed class SipWssCallTransport : ICallTransport
 
         try
         {
-            // Create SDP offer using SIPSorcery's RTCPeerConnection
-            using var pc = new SIPSorcery.Net.RTCPeerConnection(new SIPSorcery.Net.RTCConfiguration
+            // Create RTCPeerConnection for DTLS-SRTP (required by Google)
+            var pc = new SIPSorcery.Net.RTCPeerConnection(new SIPSorcery.Net.RTCConfiguration
             {
-                iceServers = [new SIPSorcery.Net.RTCIceServer { urls = "stun:stun.l.google.com:19302" }]
+                iceServers = [new SIPSorcery.Net.RTCIceServer { urls = "stun:stun.l.google.com:19302" }],
+                // Google's DTLS relay uses TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (confirmed via Chrome WebRTC stats)
+                X_UseRsaForDtlsCertificate = true,
+                X_UseRtpFeedbackProfile = true, // Use SAVPF profile like Chrome
             });
 
             var audioTrack = new MediaStreamTrack(
@@ -132,6 +135,117 @@ public sealed class SipWssCallTransport : ICallTransport
                     new(SDPWellKnownMediaFormatsEnum.PCMA),
                 });
             pc.addTrack(audioTrack);
+
+            // Wire audio receive events — decode Opus to PCM before firing event
+            // Google sends Opus at 48kHz stereo (OPUS/48000/2) — decode to mono for playback
+            var rtpCount = 0;
+            const int opusChannels = 2; // stereo from Google
+            const int maxFrameSamples = 960 * opusChannels; // 20ms at 48kHz stereo
+#pragma warning disable CA2000 // Opus decoder lifetime managed by call session
+            var opusDecoder = Concentus.OpusCodecFactory.CreateDecoder(48000, opusChannels);
+#pragma warning restore CA2000
+            pc.OnRtpPacketReceived += (ep, mt, pkt) =>
+            {
+                // Allocate per-invocation to avoid cross-thread sharing (~23KB, acceptable)
+                var pcmBuf = new short[maxFrameSamples * 6]; // room for up to 120ms frames
+                rtpCount++;
+                if (rtpCount <= 5 || rtpCount % 500 == 0)
+                {
+#pragma warning disable CA1848, CA1873
+                    _logger.LogInformation(
+                        "RTP #{Count} type={MediaType} pt={PayloadType} len={Len} ssrc={Ssrc} seq={Seq}",
+                        rtpCount, mt, pkt.Header.PayloadType, pkt.Payload.Length,
+                        pkt.Header.SyncSource, pkt.Header.SequenceNumber);
+#pragma warning restore CA1848, CA1873
+                }
+
+                if (mt == SDPMediaTypesEnum.audio && pkt.Header.PayloadType == 111)
+                {
+                    // Decode Opus → 16-bit PCM at 48kHz
+#pragma warning disable CA1031
+                    try
+                    {
+                        var samples = opusDecoder.Decode(pkt.Payload, pcmBuf.AsSpan(), 960);
+                        if (samples > 0)
+                        {
+                            // Downmix stereo → mono: average L+R channels
+                            var monoSamples = samples; // samples is per-channel
+                            var monoBytes = new byte[monoSamples * 2];
+                            for (int i = 0; i < monoSamples; i++)
+                            {
+                                int left = pcmBuf[i * opusChannels];
+                                int right = pcmBuf[i * opusChannels + 1];
+                                short mono = (short)((left + right) / 2);
+                                monoBytes[i * 2] = (byte)(mono & 0xFF);
+                                monoBytes[i * 2 + 1] = (byte)(mono >> 8);
+                            }
+
+                            AudioReceived?.Invoke(this, new AudioDataEventArgs(callId, monoBytes, 48000));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (rtpCount <= 3)
+                        {
+#pragma warning disable CA1848, CA1873
+                            _logger.LogWarning(ex, "Opus decode failed for packet #{Count}", rtpCount);
+#pragma warning restore CA1848, CA1873
+                        }
+                    }
+#pragma warning restore CA1031
+                }
+            };
+
+            // Log ALL state changes for DTLS debugging
+            pc.onconnectionstatechange += (state) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} connection: {State}", callId, state);
+#pragma warning restore CA1848, CA1873
+            };
+            pc.oniceconnectionstatechange += (state) =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} ICE: {State}", callId, state);
+
+#if DEBUG
+                // Diagnostic: dump DTLS configuration via reflection when ICE connects
+                if (state == SIPSorcery.Net.RTCIceConnectionState.connected)
+                {
+                    try
+                    {
+                        var configField = pc.GetType().GetField("_configuration",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        if (configField?.GetValue(pc) is SIPSorcery.Net.RTCConfiguration cfg)
+                        {
+                            _logger.LogInformation(
+                                "DTLS config: UseRsa={UseRsa}, DisableEMS={DisableEms}, FeedbackProfile={Fb}",
+                                cfg.X_UseRsaForDtlsCertificate, cfg.X_DisableExtendedMasterSecretKey,
+                                cfg.X_UseRtpFeedbackProfile);
+                        }
+
+                        _logger.LogInformation("IceRole={IceRole}", pc.IceRole);
+                    }
+#pragma warning disable CA1031
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to inspect DTLS config");
+                    }
+#pragma warning restore CA1031
+                }
+#endif
+#pragma warning restore CA1848, CA1873
+            };
+            pc.onsignalingstatechange += () =>
+            {
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Call {CallId} signaling: {State}", callId, pc.signalingState);
+#pragma warning restore CA1848, CA1873
+            };
+
+            // Store session with peer connection
+            var session = new SipCallSession(callId) { PeerConnection = pc };
+            _activeCalls[callId] = session;
 
             var offer = pc.createOffer();
             await pc.setLocalDescription(offer).ConfigureAwait(false);
@@ -193,24 +307,44 @@ public sealed class SipWssCallTransport : ICallTransport
     {
         LogCallEnded(_logger, callId, null);
 
-        // TODO: send SIP BYE via _wsChannel when active call tracking is wired up
-        // (SIPUserAgent/_userAgent removed; we now use raw WebSocket directly)
-
-        if (_activeCalls.TryRemove(callId, out var session))
+#pragma warning disable CA2000 // Session is disposed within this block
+        if (_activeCalls.TryRemove(callId, out var session) && _wsChannel is not null)
+#pragma warning restore CA2000
         {
+            // Send SIP BYE if we have dialog state
+            if (session.RemoteContactUri is not null && session.ToHeader is not null)
+            {
+                var bye = $"BYE {session.RemoteContactUri} SIP/2.0\r\n";
+
+                foreach (var route in session.RouteSet)
+                {
+                    bye += $"Route: {route}\r\n";
+                }
+
+                bye +=
+                    $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                    $"Max-Forwards: 69\r\n" +
+                    $"To: {session.ToHeader}\r\n" +
+                    $"From: {session.FromHeader}\r\n" +
+                    $"Call-ID: {callId}\r\n" +
+                    $"CSeq: {_inviteCSeq + 10} BYE\r\n" +
+                    $"User-Agent: {UserAgent}\r\n" +
+                    $"Content-Length: 0\r\n" +
+                    $"\r\n";
+
+                await _wsChannel.SendAsync(bye, ct).ConfigureAwait(false);
+            }
+
             session.Status = CallStatusType.Completed;
             session.Dispose();
         }
-
-        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     public void SendAudio(string callId, ReadOnlyMemory<byte> pcmData, int sampleRate)
     {
-        if (_activeCalls.TryGetValue(callId, out var session))
+        if (_activeCalls.TryGetValue(callId, out var session) && session.PeerConnection is not null)
         {
-            // Send raw PCM — SIPSorcery's RTPSession handles encoding
-            session.RtpSession.SendAudio((uint)(pcmData.Length / 2), pcmData.ToArray());
+            session.PeerConnection.SendAudio((uint)(pcmData.Length / 2), pcmData.ToArray());
         }
     }
 
@@ -325,6 +459,44 @@ public sealed class SipWssCallTransport : ICallTransport
 
                         if (statusCode == 183 || statusCode == 180)
                         {
+                            // Extract SDP body from 183 and set as remote description
+                            if (statusCode == 183)
+                            {
+                                var sdpSep = message.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                                if (sdpSep >= 0)
+                                {
+                                    var sdpBody = message[(sdpSep + 4)..].Trim();
+                                    if (sdpBody.StartsWith("v=", StringComparison.Ordinal))
+                                    {
+                                        var inviteCallId = ExtractHeaderValue(message, "Call-ID");
+                                        if (inviteCallId is not null &&
+                                            _activeCalls.TryGetValue(inviteCallId, out var callSession) &&
+                                            callSession.PeerConnection is not null)
+                                        {
+                                            // Log remote SDP for DTLS diagnostics
+#pragma warning disable CA1848, CA1873
+                                        _logger.LogInformation(
+                                            "Remote SDP from 183:\n{Sdp}", sdpBody);
+#pragma warning restore CA1848, CA1873
+
+                                        var answer = new SIPSorcery.Net.RTCSessionDescriptionInit
+                                            {
+                                                type = SIPSorcery.Net.RTCSdpType.answer,
+                                                sdp = sdpBody,
+                                            };
+                                            var setResult = callSession.PeerConnection.setRemoteDescription(answer);
+#pragma warning disable CA1848, CA1873
+                                            _logger.LogInformation(
+                                                "Set remote SDP from 183: {Result}, ICE={Ice}, conn={Conn}",
+                                                setResult,
+                                                callSession.PeerConnection.iceConnectionState,
+                                                callSession.PeerConnection.connectionState);
+#pragma warning restore CA1848, CA1873
+                                        }
+                                    }
+                                }
+                            }
+
                             // Parse raw headers from the message text — SIPSorcery may
                             // not handle Google's complex URIs correctly
                             var contactUri = ExtractHeader(message, "Contact");
@@ -383,7 +555,7 @@ public sealed class SipWssCallTransport : ICallTransport
                         }
                         else if (statusCode == 200)
                         {
-                            // 200 OK for INVITE — send ACK
+                            // 200 OK for INVITE — send ACK and store dialog state
                             var contactUri = ExtractHeader(message, "Contact");
                             var toHeader = ExtractHeader(message, "To");
                             var fromHeader = ExtractHeader(message, "From");
@@ -391,6 +563,19 @@ public sealed class SipWssCallTransport : ICallTransport
                             var recordRoutes = ExtractAllHeaders(message, "Record-Route");
 
                             var contactSipUri = ExtractSipUri(contactUri ?? $"sip:unknown@{SipDomain}");
+
+                            // Store dialog state for BYE
+                            if (callIdValue is not null &&
+                                _activeCalls.TryGetValue(callIdValue, out var invSession))
+                            {
+                                invSession.RemoteContactUri = contactSipUri;
+                                invSession.ToHeader = toHeader;
+                                invSession.FromHeader = fromHeader;
+                                // Reverse Record-Route for Route set
+                                invSession.RouteSet = [.. recordRoutes];
+                                invSession.RouteSet.Reverse();
+                                invSession.Status = CallStatusType.Active;
+                            }
 
                             var ack = $"ACK {contactSipUri} SIP/2.0\r\n";
 
@@ -426,6 +611,44 @@ public sealed class SipWssCallTransport : ICallTransport
 #pragma warning restore CA1848, CA1873
                 }
 #pragma warning restore CA1031
+            }
+            else if (message.StartsWith("BYE ", StringComparison.Ordinal))
+            {
+                // Incoming BYE — remote side hung up
+                var byeCallId = ExtractHeaderValue(message, "Call-ID");
+                var byeToHeader = ExtractHeader(message, "To");
+                var byeFromHeader = ExtractHeader(message, "From");
+                var byeVia = ExtractHeader(message, "Via");
+                var byeCSeq = ExtractHeaderValue(message, "CSeq");
+
+#pragma warning disable CA1848, CA1873
+                _logger.LogInformation("Received BYE for call {CallId} — sending 200 OK", byeCallId);
+#pragma warning restore CA1848, CA1873
+
+                // Send 200 OK response to BYE
+                if (byeCallId is not null && byeVia is not null)
+                {
+                    var byeOk = $"SIP/2.0 200 OK\r\n" +
+                        $"Via: {byeVia}\r\n" +
+                        $"To: {byeToHeader}\r\n" +
+                        $"From: {byeFromHeader}\r\n" +
+                        $"Call-ID: {byeCallId}\r\n" +
+                        $"CSeq: {byeCSeq}\r\n" +
+                        $"Content-Length: 0\r\n" +
+                        $"\r\n";
+
+                    _ = _wsChannel!.SendAsync(byeOk);
+
+                    // Clean up the call session
+#pragma warning disable CA2000
+                    if (_activeCalls.TryRemove(byeCallId, out var byeSession))
+#pragma warning restore CA2000
+                    {
+                        byeSession.Status = CallStatusType.Completed;
+                        byeSession.Dispose();
+                        LogCallEnded(_logger, byeCallId, null);
+                    }
+                }
             }
         };
 
@@ -572,23 +795,28 @@ public sealed record SipCredentials(
     string PhoneNumber,
     int ExpirySeconds);
 
-/// <summary>Per-call state</summary>
-#pragma warning disable CA1812 // Instantiated via ConcurrentDictionary in active-call tracking
+/// <summary>Per-call state — holds the RTCPeerConnection for media.</summary>
+#pragma warning disable CA1812
 internal sealed class SipCallSession : IDisposable
 {
     public string CallId { get; }
-    public RTPSession RtpSession { get; }
+    public SIPSorcery.Net.RTCPeerConnection? PeerConnection { get; set; }
     public CallStatusType Status { get; set; } = CallStatusType.Unknown;
 
-    public SipCallSession(string callId, RTPSession rtpSession)
+    // Dialog state for BYE
+    public string? RemoteContactUri { get; set; }
+    public string? ToHeader { get; set; }
+    public string? FromHeader { get; set; }
+    public List<string> RouteSet { get; set; } = [];
+
+    public SipCallSession(string callId)
     {
         CallId = callId;
-        RtpSession = rtpSession;
     }
 
     public void Dispose()
     {
-        RtpSession.Close("call ended");
+        PeerConnection?.close();
     }
 }
 #pragma warning restore CA1812

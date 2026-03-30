@@ -12,8 +12,8 @@ namespace GvResearch.Softphone.Audio;
 /// </summary>
 public sealed class AudioEngine : IDisposable
 {
-    // G.711 codec uses 8kHz; the transport delivers 8kHz PCM
-    private const int DeviceSampleRate = 8000;
+    // Opus decodes to 48kHz PCM; match that for playback
+    private const int DeviceSampleRate = 48000;
     private const int Channels = 1;
     private const int BitsPerSample = 16;
 

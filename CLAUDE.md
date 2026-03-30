@@ -1,25 +1,22 @@
 # GVResearch — Claude Code Context
 
-## IMMEDIATE PRIORITY: SIP WebSocket Connection Fix
+## Current Status (2026-03-30): End-to-end VoIP calls WORKING
 
-The WebSocket connection to Google's SIP proxy was failing because we had the **wrong URL**.
+Outbound calls to real phone numbers work end-to-end: SIP signaling, DTLS-SRTP media, and Opus audio playback are all functional. The phone rings, the call connects, and incoming audio plays through the speaker.
 
-**The fix:**
-- **WRONG:** `wss://216.239.36.145:443` (this is the SIP route, not the WebSocket endpoint)
-- **RIGHT:** `wss://web.voice.telephony.goog/websocket`
+**What works:**
+- SIP over WebSocket: REGISTER, INVITE, PRACK, 180, 200 OK, ACK, BYE
+- DTLS-SRTP media: ICE connectivity + DTLS handshake + SRTP encryption/decryption
+- Incoming audio: Opus decode → PCM → NAudio speaker playback (48kHz mono)
+- Cookie auto-refresh: health check every 4h + reactive 401 retry from Chrome CDP
+- Incoming BYE handling: responds 200 OK, cleans up session
 
-**What was blocking:** The server silently ignored our WebSocket upgrade because we were connecting to the SIP proxy IP directly. The actual WebSocket endpoint is a hostname with a `/websocket` path.
-
-**What to do now:**
-1. Read `captures/iaet-exports/gv-websocket-upgrade-headers.json` — has the exact upgrade request/response headers
-2. Update `GvSipWebSocketChannel` (or equivalent) to connect to `wss://web.voice.telephony.goog/websocket`
-3. Set `Host: web.voice.telephony.goog`, `Origin: https://voice.google.com`, `Sec-WebSocket-Protocol: sip`
-4. Do NOT send cookies or auth in the upgrade — auth is post-connection via SIP REGISTER
-5. After WebSocket opens, send SIP REGISTER (server will 401, then resend with Bearer token)
-6. The `Service-Route` in the 200 OK response provides `216.239.36.145` as the SIP route for subsequent INVITE/BYE messages
-7. Test with a real call to verify end-to-end
-
-**All research is complete.** See `docs/investigations/gv-complete-research-summary.md` for the full 6-layer architecture reference.
+**What still needs work:**
+1. **Outbound audio** — Microphone capture → Opus encode → outbound RTP (other side can't hear us yet)
+2. **Incoming call support** — Listen for SIP INVITE on WebSocket, surface to UI
+3. **Session timer refresh** — Re-INVITE every 90 seconds (Google requires `refresher=uac`)
+4. **BYE 200 OK delivery** — Google retransmits BYE; our 200 OK Via headers may need fixing
+5. **Voicemail service** — List, play, delete, transcription
 
 ---
 
@@ -40,15 +37,31 @@ The Google Voice API has been fully mapped through live traffic capture. Before 
 ### Authentication
 - GV uses **cookie-based auth** (SAPISID, SID, HSID, SSID, APISID), NOT OAuth2 bearer tokens
 - Authorization header: `SAPISIDHASH <timestamp>_<sha1(timestamp + " " + SAPISID + " " + origin)>`
-- **Auth strategy:** One-time Playwright login (human types creds ~10s) → cookies encrypted to disk → reused headless for weeks/months → health check + refresh on each invocation → re-login only when refresh fails
-- `GvHttpClientHandler.cs` injects SAPISIDHASH + full cookie set on every outgoing request
-- `GvAuthService` implements `GetValidCookiesAsync()` and `ComputeSapisidHash()` — `LoginInteractiveAsync()` and `TryRefreshSessionAsync()` are deferred
-- See `docs/api-research/headless-integration-guide.md` for the full auth flow including health check and refresh
+- **Auth strategy:** Chrome CDP cookie extraction → encrypted to disk → proactive health check every 4h → reactive 401 retry → auto re-extract from Chrome when expired
+- `GvHttpClientHandler.cs` injects SAPISIDHASH + full cookie set on every outgoing request; on 401, auto-calls `RefreshCookiesAsync()` and retries
+- `GvAuthService` implements `GetValidCookiesAsync()` (with health check), `LoginInteractiveAsync()`, `RefreshCookiesAsync()`, and `ComputeSapisidHash()`
+- `CookieRetriever` (in `GvResearch.Shared/Auth/`) extracts cookies via Chrome CDP — shared between CLI and softphone
+- Cookie lifetimes: SAPISID/SID ~13 months, COMPASS ~10 days, `__Secure-*PSIDRTS` rotates daily
+- See `docs/api-research/headless-integration-guide.md` for the full auth flow
+
+### Environment Setup (REQUIRED)
+
+The GV API key must be set as an environment variable before running any project:
+
+```powershell
+# Windows (run once — persists across sessions):
+.\setup-env.ps1
+
+# Linux/macOS:
+source ./setup-env.sh
+```
+
+This sets `GvResearch__ApiKey` which .NET configuration binds to `GvResearch:ApiKey`. The key is Google's public browser-scoped Voice API key — not a secret, but kept out of source to avoid GitGuardian flags.
 
 ### API Protocol
 - **Base URL:** `https://clients6.google.com/voice/v1/voiceclient/`
 - **Format:** Protobuf serialized as JSON arrays (`application/json+protobuf` with `alt=protojson`)
-- **API Key:** `{GV_API_KEY}` (public, scoped to Voice)
+- **API Key:** Set via `GvResearch__ApiKey` env var (see Environment Setup above)
 - Responses are **nested arrays, not objects** — field position is determined by .proto schema
 
 ### SDK Architecture (IGvClient)
@@ -126,56 +139,84 @@ dotnet run --project src/GvResearch.Client.Cli -- --capture-signaler --output=D:
 6. Verifies with `account/get` health check (200 OK)
 7. Optionally captures signaler/API traffic via CDP `Network.enable` for protocol debugging
 
-**Cookie lifetime:** Core auth cookies (SAPISID, SID) last ~13 months. COMPASS cookies expire in ~10 days. `__Secure-*PSIDRTS` rotate daily. Re-run the CLI tool when API calls start returning 401.
+**Cookie lifetime:** Core auth cookies (SAPISID, SID) last ~13 months. COMPASS cookies expire in ~10 days. `__Secure-*PSIDRTS` rotate daily.
+
+**Auto-refresh:** The softphone automatically refreshes cookies when they expire:
+- `GvAuthService.GetValidCookiesAsync()` runs a health check (`account/get`) every 4 hours
+- `GvHttpClientHandler` detects 401 responses → calls `RefreshCookiesAsync()` → re-extracts from Chrome → retries
+- No manual intervention needed as long as Chrome has an active Google session
 
 ### SIP Call Transport (BUILT — `SipWssCallTransport`)
 
-Real VoIP calls working end-to-end:
+Real VoIP calls working end-to-end with audio:
 - `SipWssCallTransport` implements `ICallTransport` using raw SIP over WebSocket
 - `GvSipWebSocketChannel` handles WebSocket with `"sip"` subprotocol
 - `GvSipCredentialProvider` fetches credentials from `sipregisterinfo/get`
-- Full flow: REGISTER → 401 → Digest → 200 OK → INVITE → 100 → 183 → PRACK → 180 → PRACK → 200 → ACK → **phone rings**
+- Opus decoding via Concentus (48kHz stereo → mono downmix)
+- Full flow: REGISTER → 401 → Digest → 200 OK → INVITE → 100 → 183 → PRACK → 180 → PRACK → 200 → ACK → **audio flows**
+- Incoming BYE handled with 200 OK response
+
+### DTLS-SRTP Media (RESOLVED — 2026-03-30)
+
+**Root cause of DTLS failure:** Google's media relay uses RSA cipher suites (`TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`), NOT ECDSA. Confirmed via Chrome WebRTC stats dump (`captures/iaet-exports/gv-rtcstats-full-dump.txt`).
+
+**Required SIPSorcery configuration:**
+- `X_UseRsaForDtlsCertificate = true` — use RSA cipher suites (NOT ECDSA)
+- `X_UseRtpFeedbackProfile = true` — use `UDP/TLS/RTP/SAVPF` like Chrome
+- Must remove `encrypt_then_mac` extension from DTLS ClientHello (Google rejects it)
+- Must include `extended_master_secret` extension
+- SRTP profiles limited to Chrome-compatible set: AES_128_GCM, AES_256_GCM, AES128_CM_HMAC_SHA1_80/32
+
+**Modified SIPSorcery build:** `local-packages/SIPSorcery.10.0.6-diag.nupkg` — forked from sipsorcery-org/sipsorcery master with:
+- DTLS ClientHello extension filtering (remove encrypt_then_mac, status_request)
+- Extended master secret always included
+- Chrome-compatible SRTP protection profiles (4 instead of 12)
+- Diagnostic logging at DTLS handshake, packet, and SRTP levels
+
+**Negotiated parameters (confirmed working):**
+- DTLS cipher: `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` (0xC02F)
+- SRTP profile: `AES_CM_128_HMAC_SHA1_80` (0x0001)
+- DTLS version: 1.2 (FEFD)
+
+### Call Signaling + Audio Status (VERIFIED — 2026-03-30)
+
+Full call flow verified end-to-end with real phone call + audio:
+- REGISTER → 401 → Digest → 200 OK ✅
+- INVITE → 100 Trying ✅
+- 183 Session Progress (SDP answer) → PRACK → 200 OK ✅
+- 180 Ringing → PRACK → 200 OK ✅ — **phone rings!**
+- 200 OK (INVITE) → ACK → **call connected** ✅
+- ICE → connected, DTLS → handshake complete, SRTP → keys derived ✅
+- **Incoming audio plays through speaker** (Opus 48kHz → PCM) ✅
+- Remote BYE received → 200 OK ✅
+- Our BYE sent → call ended ✅
 
 ### What Still Needs to Be Built
-1. **Audio pipeline (end-to-end)** — SDP answer from 183 contains Google's media endpoint. Need to: (a) parse SDP from 183 response, (b) establish DTLS-SRTP to Google's media relay at `74.125.39.x:26500`, (c) negotiate Opus codec, (d) wire NAudio mic/speaker to RTP stream. See audio plan below.
+1. **Outbound audio (mic → Opus → RTP)** — Microphone capture via NAudio, Opus encode via Concentus, send as RTP through RTCPeerConnection. Currently the remote side cannot hear us.
 2. **Incoming call support** — Listen for SIP INVITE on the WebSocket, auto-answer or surface to UI
-3. **`LoginInteractiveAsync()`** — Integrate cookie CLI into `GvAuthService` so it auto-triggers on 401
-4. **`TryRefreshSessionAsync()`** — Health check via `threadinginfo/get` + cookie refresh cascade
-5. **BYE handling** — Send SIP BYE on hangup, handle remote BYE
-6. **Session timer refresh** — Re-INVITE every 90 seconds (session timer from 200 OK)
-7. **Voicemail service** — List, play (signed URL), delete, transcription access
-
-### Audio Pipeline Plan
-
-The SDP answer in the 183 Session Progress contains Google's media endpoint:
-```
-o=xavier ... IN IP4 74.125.39.159
-m=audio 26500 UDP/TLS/RTP/SAVPF 111 110
-a=rtpmap:111 opus/48000/2
-a=candidate:1 1 UDP 1 74.125.39.159 26500 typ host
-a=ice-lite
-a=setup:passive
-a=fingerprint:sha-256 ...
-```
-
-**What needs to happen for audio:**
-1. Parse SDP from 183 response body (already received but not processed)
-2. Create `RTCPeerConnection` with the SDP answer (SIPSorcery handles DTLS-SRTP)
-3. Set local SDP (from our INVITE offer) and remote SDP (from 183 answer)
-4. ICE connectivity check to `74.125.39.159:26500` (Google uses `ice-lite` — fixed endpoint)
-5. DTLS handshake (Google is `setup:passive`, we are `setup:actpass`)
-6. Opus audio flows over SRTP
-7. Wire `AudioEngine` (NAudio) to send/receive decoded PCM audio
-8. Handle SDP renegotiation (~6 seconds after incoming call connects)
+3. **Session timer refresh** — Re-INVITE every 90 seconds (Google's SDP has `Session-Expires: 90`, `refresher=uac`)
+4. **BYE 200 OK Via headers** — Google retransmits BYE 3-4 times, suggesting our 200 OK response may have incorrect Via headers
 5. **Voicemail service** — List, play (signed URL), delete, transcription access
-6. **Opus codec support** — Replace G.711 fallback with native Opus for better audio quality (requires native lib or managed Opus decoder)
+
+### Audio Pipeline Status (PARTIALLY WORKING — 2026-03-30)
+
+**Inbound audio: WORKING**
+- Google sends Opus RTP (pt=111, 48kHz/2ch, ~50 pkt/sec)
+- Decoded via Concentus stereo decoder → downmixed to mono → 48kHz 16-bit PCM
+- Played through NAudio `WaveOutEvent` at 48kHz
+- ~500 packets per 10-second call, only 2-3 occasional SRTP unprotect failures (HMAC, negligible)
+
+**Outbound audio: NOT YET IMPLEMENTED**
+- AudioEngine captures mic at 48kHz but `SendAudio()` path needs Opus encoding
+- `RTCPeerConnection.SendAudio()` expects encoded samples — needs proper duration/timestamp handling
+- Google may stop sending audio if it doesn't receive any RTP from us (no keepalive)
 
 ## Coding Conventions
 
 - .NET 10, C# 13, nullable enabled, TreatWarningsAsErrors
 - xUnit + FluentAssertions for testing
-- Serilog for structured logging
-- No sensitive data in source (tokens encrypted at rest, .gitignore covers captures)
+- Microsoft.Extensions.Logging (console + file) — softphone logs to `D:/prj/GVResearch/logs/softphone.log`
+- No sensitive data in source (tokens encrypted at rest, API key via env var, .gitignore covers captures/logs)
 - Rate limits: 10 req/min, 100 req/day per endpoint (enforced by `GvRateLimiter`)
 - `--allow-destructive` flag required for delete operations
 
@@ -187,7 +228,7 @@ src/
     Endpoints/             — AccountEndpoints, ThreadEndpoints, SmsEndpoints, CallEndpoints
     Auth/                  — BearerSchemeHandler (placeholder, Phase 2)
   GvResearch.Shared/       — Core SDK: IGvClient, auth, protocol, services, models
-    Auth/                  — IGvAuthService, GvAuthService, GvCookieSet, TokenEncryption
+    Auth/                  — IGvAuthService, GvAuthService, GvCookieSet, TokenEncryption, CookieRetriever
     Exceptions/            — GvApiException, GvAuthException, GvRateLimitException
     Http/                  — GvHttpClientHandler (SAPISIDHASH injection)
     Models/                — Domain records (GvAccount, GvThread, GvMessage, etc.)
@@ -197,9 +238,11 @@ src/
     Signaler/              — IGvSignalerClient, GvSignalerClient, SignalerEvent types, SignalerMessageParser
     Transport/             — ICallTransport, TransportCallResult, TransportCallStatus
   GvResearch.Client.Cli/   — CLI tool for headless GV operations (future)
-  GvResearch.Sip/          — SIP gateway (uses IGvClient + IGvSignalerClient + WebRtcCallTransport)
-    Transport/             — WebRtcCallTransport, WebRtcCallSession
-  GvResearch.Softphone/    — Softphone UI (Avalonia, future)
+  GvResearch.Sip/          — SIP gateway (SIP-over-WebSocket + DTLS-SRTP media)
+    Transport/             — SipWssCallTransport, GvSipWebSocketChannel, GvSipCredentialProvider, GvDtlsSrtpClient
+  GvResearch.Softphone/    — Softphone UI (Avalonia) + audio engine (NAudio + Opus)
+    Audio/                 — AudioEngine (mic capture + speaker playback at 48kHz)
+    Phone/                 — GvPhoneClient (call orchestrator)
 docs/
   api-research/            — API reference and integration guides (READ FIRST)
   superpowers/plans/       — Implementation plans
