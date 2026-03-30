@@ -59,9 +59,11 @@ public sealed class SipWssCallTransport : ICallTransport
 
     private GvSipWebSocketChannel? _wsChannel;
     private SipCredentials? _credentials;
-    private string? _serviceRoute; // From REGISTER 200 OK Service-Route header
+    private string? _serviceRoute;
     private string? _regContactUser;
     private string? _regWsHost;
+    private int _inviteCSeq;
+    private int _prackCSeq;
     private bool _registered;
 
     // IncomingCallReceived is never raised by this transport (GV SIP is outbound-only);
@@ -134,7 +136,10 @@ public sealed class SipWssCallTransport : ICallTransport
             var offer = pc.createOffer();
             await pc.setLocalDescription(offer).ConfigureAwait(false);
 
-            // Build SIP INVITE matching captured format
+            // Use a random CSeq like the browser does
+            _inviteCSeq = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1000, 9999);
+            _prackCSeq = _inviteCSeq + 1;
+
             var invTag = CallProperties.CreateNewTag();
             var sipUsernameEncoded = Uri.EscapeDataString(_credentials.SipUsername);
 
@@ -144,7 +149,7 @@ public sealed class SipWssCallTransport : ICallTransport
                 $"From: <sip:{sipUsernameEncoded}@{SipDomain}>;tag={invTag}\r\n" +
                 $"To: <sip:{destNumber}@{SipDomain}>\r\n" +
                 $"Call-ID: {callId}\r\n" +
-                $"CSeq: 1 INVITE\r\n" +
+                $"CSeq: {_inviteCSeq} INVITE\r\n" +
                 $"Contact: <sip:{_regContactUser}@{_regWsHost};transport=wss>\r\n" +
                 $"Content-Type: application/sdp\r\n" +
                 $"Session-Expires: 90\r\n" +
@@ -225,6 +230,7 @@ public sealed class SipWssCallTransport : ICallTransport
 
         // Track PRACKed RSeq values to avoid re-PRACKing retransmissions
         var prackedRSeqs = new HashSet<string>(StringComparer.Ordinal);
+        const string XGoogleClientInfo = "X-Google-Client-Info: Ci1Hb29nbGVWb2ljZSB2b2ljZS53ZWItZnJvbnRlbmRfMjAyNjAzMTguMDhfcDESLUdvb2dsZVZvaWNlIHZvaWNlLndlYi1mcm9udGVuZF8yMDI2MDMxOC4wOF9wMRgFKhBDaHJvbWUgMTQ2LjAuMC4w";
 
         // These are shared between the event handler and the REGISTER below
         var regCallId = Guid.NewGuid().ToString("N")[..22];
@@ -334,25 +340,36 @@ public sealed class SipWssCallTransport : ICallTransport
                                 && prackedRSeqs.Add(rseqValue)) // Only PRACK each RSeq once
                             {
                                 var contactSipUri = ExtractSipUri(contactUri);
+                                var currentPrackCSeq = _prackCSeq++;
 
-                                // Build PRACK with Record-Route → Route
-                                var prack =
-                                    $"PRACK {contactSipUri} SIP/2.0\r\n" +
-                                    $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n";
+                                // Build PRACK matching browser's exact format:
+                                // 1. Route order: REVERSED from Record-Route (non-econt first)
+                                // 2. Header order: Route, Via, Max-Forwards, To, From, ...
+                                // 3. RAck: {RSeq} {INVITE_CSeq} INVITE
+                                // 4. CSeq: incrementing from INVITE CSeq + 1
+                                // 5. Max-Forwards: 69
+                                // 6. Include all expected headers
 
-                                // Add Route headers (Record-Route in same order for PRACK)
-                                foreach (var rr in recordRoutes)
+                                var prack = $"PRACK {contactSipUri} SIP/2.0\r\n";
+
+                                // Route headers: REVERSE order from Record-Route
+                                for (int i = recordRoutes.Count - 1; i >= 0; i--)
                                 {
-                                    prack += $"Route: {rr}\r\n";
+                                    prack += $"Route: {recordRoutes[i]}\r\n";
                                 }
 
                                 prack +=
-                                    $"From: {fromHeader}\r\n" +
+                                    $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                                    $"Max-Forwards: 69\r\n" +
                                     $"To: {toHeader}\r\n" +
+                                    $"From: {fromHeader}\r\n" +
                                     $"Call-ID: {callIdValue}\r\n" +
-                                    $"CSeq: 2 PRACK\r\n" +
-                                    $"RAck: {rseqValue} 1 INVITE\r\n" +
-                                    $"Max-Forwards: 70\r\n" +
+                                    $"CSeq: {currentPrackCSeq} PRACK\r\n" +
+                                    $"{XGoogleClientInfo}\r\n" +
+                                    $"RAck: {rseqValue} {_inviteCSeq} INVITE\r\n" +
+                                    $"Allow: INVITE,ACK,CANCEL,BYE,UPDATE,MESSAGE,OPTIONS,REFER,INFO,PRACK\r\n" +
+                                    $"Supported: outbound,record-aware\r\n" +
+                                    $"User-Agent: {UserAgent}\r\n" +
                                     $"Content-Length: 0\r\n" +
                                     $"\r\n";
 
@@ -375,21 +392,21 @@ public sealed class SipWssCallTransport : ICallTransport
 
                             var contactSipUri = ExtractSipUri(contactUri ?? $"sip:unknown@{SipDomain}");
 
-                            var ack =
-                                $"ACK {contactSipUri} SIP/2.0\r\n" +
-                                $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n";
+                            var ack = $"ACK {contactSipUri} SIP/2.0\r\n";
 
-                            foreach (var rr in recordRoutes)
+                            // Route: reversed Record-Route
+                            for (int i = recordRoutes.Count - 1; i >= 0; i--)
                             {
-                                ack += $"Route: {rr}\r\n";
+                                ack += $"Route: {recordRoutes[i]}\r\n";
                             }
 
                             ack +=
-                                $"From: {fromHeader}\r\n" +
+                                $"Via: SIP/2.0/wss {_regWsHost};branch={CallProperties.CreateBranchId()};keep\r\n" +
+                                $"Max-Forwards: 69\r\n" +
                                 $"To: {toHeader}\r\n" +
+                                $"From: {fromHeader}\r\n" +
                                 $"Call-ID: {callIdValue}\r\n" +
-                                $"CSeq: 1 ACK\r\n" +
-                                $"Max-Forwards: 70\r\n" +
+                                $"CSeq: {_inviteCSeq} ACK\r\n" +
                                 $"Content-Length: 0\r\n" +
                                 $"\r\n";
 
